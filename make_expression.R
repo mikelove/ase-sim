@@ -1,5 +1,14 @@
-# use AHub to obtain Drosophila genes and genome
+cmd_args=commandArgs(TRUE)
+outfile <- cmd_args[1]
+
 library(AnnotationHub)
+library(ensembldb)
+library(dplyr)
+library(ggplot2)
+library(GenomicFeatures)
+library(Biostrings)
+
+# use AHub to obtain Drosophila genes and genome
 ah <- AnnotationHub()
 
 # Ensembl database 
@@ -29,9 +38,10 @@ which_exons <- exons[match(which_id, mcols(exons)$exon_id)]
 at <- mid(which_exons)
 
 # plot the positions
-library(ggplot2)
 dat <- data.frame(at=at, chrom=seqnames(which_exons))
+png(file="positions.png")
 ggplot(dat, aes(at)) + geom_histogram() + facet_wrap(~chrom)
+dev.off()
 
 # split the positions by chromosome
 spl_at <- split(at, seqnames(which_exons))
@@ -40,7 +50,6 @@ spl_at <- split(at, seqnames(which_exons))
 dna <- import(genome)[1:7]
 
 # flip a letter within each gene
-library(Biostrings)
 dna_alt <- lapply(names(dna), function(c) {
   x <- spl_at[[c]]
   # Views() is a lightweight way to pull out positions of a DNAString
@@ -57,7 +66,6 @@ rtracklayer::export(dna_alt, con="drosophila_alt.2bit")
 genome_alt <- TwoBitFile("drosophila_alt.2bit")
 
 # extract transcript sequence for both alleles
-library(GenomicFeatures)
 cdna <- extractTranscriptSeqs(genome, ebt)
 cdna_alt <- extractTranscriptSeqs(genome_alt, ebt)
 
@@ -70,18 +78,14 @@ tss_pos <- start(resize(tbg, width=1))
 ntxp <- lengths(tbg)
 ntss <- sapply(tss_pos, function(x) length(unique(x)))
 
-library(dplyr)
-library(ggplot2)
 dat <- data.frame(ntxp, ntss)
+png(file="ntss_over_ntxp.png")
 dat %>% filter(ntxp < 10 & ntxp > 1) %>%
   ggplot(aes(ntxp, ntss)) + geom_jitter(alpha=.1) + geom_abline()
+dev.off()
 
 # how many genes are we working with
 sum(ntxp %in% 2:5 & ntss < ntxp)
-
-# this will be the altered abundance of alt transcripts
-abundance <- rep(2, length(ebt))
-names(abundance) <- names(ebt)
 
 # put tss position in order of 'ebt'
 tss_pos_vector <- unlist(tss_pos)
@@ -92,11 +96,32 @@ tss_pos_vector <- tss_pos_vector[names(ebt)]
 suffix <- as(tss_pos_vector, "character")
 names(suffix) <- names(ebt)
 
-genes_to_alter <- names(tbg)[ntxp %in% 2:5 & ntss < ntxp]
-for (g in genes_to_alter) {
+# this will be the altered abundance of alt transcripts
+abundance <- rep(2, length(ebt))
+names(abundance) <- names(ebt)
+
+# alter expression of 1,000 genes
+genes_to_alter <- sample(names(tbg)[ntxp %in% 2:5 & ntss < ntxp], 1000)
+for (i in seq_along(genes_to_alter)) {
+  if (i %% 100 == 0) print(i)
+  g <- genes_to_alter[i]
   promoter <- sample(unique(tss_pos[[g]]), 1)
   idx <- mcols(tbg[[g]])$tx_name[tss_pos[[g]] == promoter]
   neg_idx <- mcols(tbg[[g]])$tx_name[tss_pos[[g]] != promoter]
   abundance[idx] <- abundance[idx] + 1/length(idx)
   abundance[neg_idx] <- abundance[neg_idx] - 1/length(neg_idx)
 }
+
+# STEP 3 write out files
+
+txps <- c(cdna, cdna_alt)
+
+tbg_reorder <- unlist(tbg)
+names(tbg_reorder) <- tbg_reorder$tx_name
+tbg_reorder <- tbg_reorder[names(ebt)]
+gene <- mcols(tbg_reorder)$gene_id
+suffix <- paste0(suffix, "_", abundance, "_", gene)
+suffix <- c(paste0(suffix, "_ref"), paste0(suffix, "_alt"))
+names(txps) <- suffix
+
+writeXStringSet(txps, file=outfile)
