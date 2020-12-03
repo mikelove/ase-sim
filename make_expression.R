@@ -126,8 +126,11 @@ gene <- mcols(tbg_reorder)$gene_id
 
 # build a suffix for the transcript names
 suffix <- paste0(tss_pos_vector, "_", round(abundance,2), "_", gene)
-suffix_long <- c(paste0(suffix, "_ref"), paste0(suffix, "_alt"))
-names(cdna_both) <- paste0(names(cdna_both), "|", suffix_long)
+
+# transcript headers are: 'name_allele|suffix'
+names(cdna_both) <- paste0(names(cdna_both), "_",
+                           rep(c("M","P"),each=length(suffix)),
+                           "|", suffix)
 
 # save abundance on unlisted 'tbg'
 txps <- unlist(tbg)

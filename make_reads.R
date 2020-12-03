@@ -4,6 +4,9 @@ load(cmd_args[2]) # granges file
 n <- as.numeric(cmd_args[3]) # per group
 libsize <- as.numeric(cmd_args[4]) # number of reads
 
+library(GenomicRanges)
+library(polyester)
+
 # from abundance to read counts
 abundance <- mcols(txps)$abundance
 
@@ -17,7 +20,6 @@ counts[counts < 1] <- 0 # zero out when expected count is < 1
 # no fold changes across sample
 fold_changes <- matrix(1, nrow=2 * length(txps), ncol=2)
 
-library(polyester)
 simulate_experiment(fasta=fasta, outdir=".",
                     num_reps=c(n,n),
                     reads_per_transcript=counts, # read counts
