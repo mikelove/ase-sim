@@ -47,10 +47,10 @@ which_exons <- exons[match(which_id, mcols(exons)$exon_id)]
 at <- mid(which_exons)
 
 # plot the positions
-dat <- data.frame(at=at, chrom=seqnames(which_exons))
-png(file="positions.png")
-ggplot(dat, aes(at)) + geom_histogram() + facet_wrap(~chrom)
-dev.off()
+## dat <- data.frame(at=at, chrom=seqnames(which_exons))
+## png(file="positions.png")
+## ggplot(dat, aes(at)) + geom_histogram() + facet_wrap(~chrom)
+## dev.off()
 
 # split the positions by chromosome
 spl_at <- split(at, seqnames(which_exons))
@@ -86,11 +86,11 @@ tss_pos <- start(resize(tbg, width=1))
 ntxp <- lengths(tbg)
 ntss <- sapply(tss_pos, function(x) length(unique(x)))
 
-dat <- data.frame(ntxp, ntss)
-png(file="ntss_over_ntxp.png")
-dat %>% filter(ntxp < 10 & ntxp > 1) %>%
-  ggplot(aes(ntxp, ntss)) + geom_jitter(alpha=.1) + geom_abline()
-dev.off()
+## dat <- data.frame(ntxp, ntss)
+## png(file="ntss_over_ntxp.png")
+## dat %>% filter(ntxp < 10 & ntxp > 1) %>%
+##   ggplot(aes(ntxp, ntss)) + geom_jitter(alpha=.1) + geom_abline()
+## dev.off()
 
 # how many genes are we working with
 sum(ntxp %in% 2:5 & ntss < ntxp)
@@ -127,8 +127,12 @@ names(tbg_reorder) <- tbg_reorder$tx_name
 tbg_reorder <- tbg_reorder[ names(ebt) ]
 gene <- mcols(tbg_reorder)$gene_id
 
+# get the mutated basepair per gene
+names(at) <- names(which_exons)
+at_along_txps <- at[ gene ]
+
 # build a suffix for the transcript names
-suffix <- paste0(tss_pos_vector, "_", round(abundance,2), "_", gene)
+suffix <- paste0(tss_pos_vector, "_", round(abundance,2), "_", gene, "_", at_along_txps)
 
 # transcript headers are: 'name_allele|suffix'
 names(cdna_both) <- paste0(names(cdna_both), "_",
@@ -141,7 +145,7 @@ names(txps) <- mcols(txps)$tx_name
 mcols(txps)$abundance <- abundance
 mcols(txps)$tss <- tss_pos_vector
 mcols(txps)$width <- width(cdna)
-
+mcols(txps)$snp_loc <- at_along_txps
 # FASTA and GRanges (with abundance)
 writeXStringSet(cdna_both, file=fastafile)
 save(ebt, tbg, txps, file=grangesfile)
