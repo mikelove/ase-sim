@@ -1,5 +1,6 @@
 cmd_args=commandArgs(TRUE)
 outfile <- cmd_args[1]
+abundancefile <- cmd_args[2]
 
 library(AnnotationHub)
 library(ensembldb)
@@ -21,14 +22,19 @@ genome <- q[[1]]
 
 # STEP 1 - flip one basepair within each gene to make alt chromosomes
 
-# exons by transcript and gene
+# exons by transcript and gene, transcripts by gene
 ebt <- exonsBy(edb, by="tx")
 ebg <- exonsBy(edb, by="gene")
+tbg <- transcriptsBy(edb, by="gene")
 
 # just standard chromosomes
 chroms <- c("2L","2R","3L","3R","4","X","Y")
 ebt <- keepSeqlevels(ebt, value=chroms, pruning.mode = "coarse")
 ebg <- keepSeqlevels(ebg, value=chroms, pruning.mode = "coarse")
+tbg <- keepSeqlevels(tbg, value=chroms, pruning.mode = "coarse")
+
+# order 'ebt' by 'tbg'
+ebt <- ebt[ mcols(unlist(tbg))$tx_name ]
 
 # pick an exon per gene, then take its middle position
 exons <- unlist(ebg)
@@ -69,10 +75,9 @@ genome_alt <- TwoBitFile("drosophila_alt.2bit")
 cdna <- extractTranscriptSeqs(genome, ebt)
 cdna_alt <- extractTranscriptSeqs(genome_alt, ebt)
 
-# STEP 2 - come up with allelic read counts
+# STEP 2 - create allelic read counts
 
 # group transcripts by TSS
-tbg <- transcriptsBy(edb, by="gene")
 tss_pos <- start(resize(tbg, width=1))
 
 ntxp <- lengths(tbg)
@@ -92,10 +97,6 @@ tss_pos_vector <- unlist(tss_pos)
 names(tss_pos_vector) <- unlist(tbg)$tx_name
 tss_pos_vector <- tss_pos_vector[names(ebt)]
 
-# start to build a suffix for the transcripts
-suffix <- as(tss_pos_vector, "character")
-names(suffix) <- names(ebt)
-
 # this will be the altered abundance of alt transcripts
 abundance <- rep(2, length(ebt))
 names(abundance) <- names(ebt)
@@ -114,14 +115,27 @@ for (i in seq_along(genes_to_alter)) {
 
 # STEP 3 write out files
 
-txps <- c(cdna, cdna_alt)
+# combine the original and altered transcripts
+cdna_both <- c(cdna, cdna_alt)
 
+# get gene id
 tbg_reorder <- unlist(tbg)
 names(tbg_reorder) <- tbg_reorder$tx_name
-tbg_reorder <- tbg_reorder[names(ebt)]
+tbg_reorder <- tbg_reorder[ names(ebt) ]
 gene <- mcols(tbg_reorder)$gene_id
-suffix <- paste0(suffix, "_", abundance, "_", gene)
-suffix <- c(paste0(suffix, "_ref"), paste0(suffix, "_alt"))
-names(txps) <- suffix
 
-writeXStringSet(txps, file=outfile)
+# build a suffix for the transcript names
+suffix <- paste0(tss_pos_vector, "_", round(abundance,2), "_", gene)
+suffix_long <- c(paste0(suffix, "_ref"), paste0(suffix, "_alt"))
+names(cdna_both) <- paste0(names(cdna_both), "|", suffix_long)
+
+# save abundance on unlisted 'tbg'
+txps <- unlist(tbg)
+names(txps) <- mcols(txps)$tx_name
+mcols(txps)$abundance <- abundance
+mcols(txps)$tss <- tss_pos_vector
+mcols(txps)$width <- width(cdna)
+
+# FASTA and GRanges (with abundance)
+writeXStringSet(cdna_both, file=outfile)
+save(ebt, tbg, txps, file=grangesfile)
