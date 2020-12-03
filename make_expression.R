@@ -1,6 +1,6 @@
 cmd_args=commandArgs(TRUE)
-outfile <- cmd_args[1]
-abundancefile <- cmd_args[2]
+fastafile <- cmd_args[1]
+grangesfile <- cmd_args[2]
 
 library(AnnotationHub)
 library(ensembldb)
@@ -137,5 +137,5 @@ mcols(txps)$tss <- tss_pos_vector
 mcols(txps)$width <- width(cdna)
 
 # FASTA and GRanges (with abundance)
-writeXStringSet(cdna_both, file=outfile)
+writeXStringSet(cdna_both, file=fastafile)
 save(ebt, tbg, txps, file=grangesfile)

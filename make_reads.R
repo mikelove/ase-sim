@@ -1,8 +1,8 @@
 cmd_args=commandArgs(TRUE)
 fasta <- cmd_args[1] # fasta file
-load(cmd_args[2]) # txps
+load(cmd_args[2]) # granges file
 n <- as.numeric(cmd_args[3]) # per group
-libsize <- as.numeric(cmd_args[4])
+libsize <- as.numeric(cmd_args[4]) # number of reads
 
 # from abundance to read counts
 abundance <- mcols(txps)$abundance
