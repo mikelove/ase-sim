@@ -9,6 +9,9 @@ library(ggplot2)
 library(GenomicFeatures)
 library(Biostrings)
 
+# set random seed
+set.seed(1)
+
 # use AHub to obtain Drosophila genes and genome
 ah <- AnnotationHub()
 

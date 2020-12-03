@@ -7,6 +7,9 @@ libsize <- as.numeric(cmd_args[4]) # number of reads
 library(GenomicRanges)
 library(polyester)
 
+# set random seed
+set.seed(1)
+
 # from abundance to read counts
 abundance <- mcols(txps)$abundance
 
