@@ -15,12 +15,13 @@ set.seed(1)
 # use AHub to obtain Drosophila genes and genome
 ah <- AnnotationHub()
 
-# Ensembl database 
-q <- query(ah, c("EnsDb",101,"Drosophila"))
+# Ensembl database
+release <- 100
+q <- query(ah, c("EnsDb",release,"Drosophila"))
 edb <- q[[1]]
 
 # genome file for the Ensembl database
-q <- query(ah, c("BDGP6.28",101,"TwoBit","dna_sm"))
+q <- query(ah, c("BDGP6.28",release,"TwoBit","dna_sm"))
 genome <- q[[1]]
 
 # STEP 1 - flip one basepair within each gene to make alt chromosomes
