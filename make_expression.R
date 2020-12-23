@@ -94,7 +94,8 @@ ntss <- sapply(tss_pos, function(x) length(unique(x)))
 ## dev.off()
 
 # how many genes are we working with
-sum(ntxp %in% 2:5 & ntss < ntxp)
+txp_idx <- ntxp %in% 3:6 & ntss < ntxp & ntss > 1
+sum(txp_idx)
 
 # put tss position in order of 'ebt'
 tss_pos_vector <- unlist(tss_pos)
@@ -106,7 +107,7 @@ abundance <- rep(2, length(ebt))
 names(abundance) <- names(ebt)
 
 # alter expression of 1,000 genes
-genes_to_alter <- sample(names(tbg)[ntxp %in% 2:5 & ntss < ntxp], 1000)
+genes_to_alter <- sample(names(tbg)[txp_idx], 1000)
 for (i in seq_along(genes_to_alter)) {
   if (i %% 100 == 0) print(i)
   g <- genes_to_alter[i]
