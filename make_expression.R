@@ -31,8 +31,8 @@ ebt <- exonsBy(edb, by="tx")
 ebg <- exonsBy(edb, by="gene")
 tbg <- transcriptsBy(edb, by="gene")
 
-# just standard chromosomes
-chroms <- c("2L","2R","3L","3R","4","X","Y")
+# just standard chromosomes -- excluding Y
+chroms <- c("2L","2R","3L","3R","4","X")
 ebt <- keepSeqlevels(ebt, value=chroms, pruning.mode = "coarse")
 ebg <- keepSeqlevels(ebg, value=chroms, pruning.mode = "coarse")
 tbg <- keepSeqlevels(tbg, value=chroms, pruning.mode = "coarse")

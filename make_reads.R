@@ -25,6 +25,7 @@ fold_changes <- matrix(1, nrow=2 * length(txps), ncol=2)
 
 simulate_experiment(fasta=fasta, outdir=".",
                     num_reps=c(n,n),
+                    fraglen=400, fragsd=25, readlen=150,
                     reads_per_transcript=counts, # read counts
                     size=100, # dispersion
                     fold_changes=fold_changes,
