@@ -40,11 +40,23 @@ tbg <- keepSeqlevels(tbg, value=chroms, pruning.mode = "coarse")
 # order 'ebt' by 'tbg'
 ebt <- ebt[ mcols(unlist(tbg))$tx_name ]
 
-# pick an exon per gene, then take its middle position
+# pick 'nexons' exon per gene, then take the middle positions
+nexons <- 3
 exons <- unlist(ebg)
 spl_ids <- split( mcols(exons)$exon_id, names(exons) )
-which_id <- unname(sapply(spl_ids, function(ids) sample(ids, 1)))
+which_id <- unname(unlist(lapply(spl_ids, function(ids) {
+  if (length(ids) <= nexons) {
+    ids
+  } else {
+    sample(ids, nexons, replace=FALSE)
+  }
+})))
+nexons * length(ebg)
+length(which_id) # less than nexons x ngenes, bc replace=FALSE
+
+# grab the exons
 which_exons <- exons[match(which_id, mcols(exons)$exon_id)]
+# grab the middle position
 at <- mid(which_exons)
 
 # plot the positions
@@ -57,7 +69,7 @@ at <- mid(which_exons)
 spl_at <- split(at, seqnames(which_exons))
 
 # make DNAStringSet of the genome (only standard chromosomes)
-dna <- import(genome)[1:7]
+dna <- import(genome)[c("2L","2R","3L","3R","4","X")]
 
 # flip a letter within each gene
 dna_alt <- lapply(names(dna), function(c) {
