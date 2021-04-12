@@ -41,7 +41,7 @@ tbg <- keepSeqlevels(tbg, value=chroms, pruning.mode = "coarse")
 ebt <- ebt[ mcols(unlist(tbg))$tx_name ]
 
 # pick 'nexons' exon per gene, then take the middle positions
-nexons <- 3
+nexons <- 5
 exons <- unlist(ebg)
 spl_ids <- split( mcols(exons)$exon_id, names(exons) )
 which_id <- unname(unlist(lapply(spl_ids, function(ids) {
@@ -141,17 +141,16 @@ names(tbg_reorder) <- tbg_reorder$tx_name
 tbg_reorder <- tbg_reorder[ names(ebt) ]
 gene <- mcols(tbg_reorder)$gene_id
 
-# get the mutated basepair per gene
-names(at) <- names(which_exons)
-at_along_txps <- at[ gene ]
-
 # build a suffix for the transcript names
-suffix <- paste0(tss_pos_vector, "_", round(abundance,2), "_", gene, "_", at_along_txps)
+suffix <- paste0(tss_pos_vector, "_", round(abundance,2), "_", gene)
 
 # transcript headers are: 'name_allele|suffix'
 names(cdna_both) <- paste0(names(cdna_both), "_",
                            rep(c("M","P"),each=length(suffix)),
                            "|", suffix)
+
+# get the mutated basepair per gene
+at_per_gene <- as(split(at, names(which_exons)), "IntegerList")
 
 # save abundance on unlisted 'tbg'
 txps <- unlist(tbg)
@@ -159,7 +158,7 @@ names(txps) <- mcols(txps)$tx_name
 mcols(txps)$abundance <- abundance
 mcols(txps)$tss <- tss_pos_vector
 mcols(txps)$width <- width(cdna)
-mcols(txps)$snp_loc <- at_along_txps
+mcols(txps)$snp_loc <- at_per_gene[ mcols(txps)$gene_id ]
 # FASTA and GRanges (with abundance)
 writeXStringSet(cdna_both, file=fastafile)
 save(ebt, tbg, txps, file=grangesfile)
