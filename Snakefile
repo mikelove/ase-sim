@@ -39,7 +39,9 @@ rule shuffle:
 rule salmon_index:
     input: "transcripts.fa"
     output: directory("anno/salmon-index-1.5.2")
-    shell: "{SALMON} index -p 2 -t {input} -i {output}"
+    params:
+        threads = "2"
+    shell: "{SALMON} index --keepDuplicates -p {params.threads} -t {input} -i {output}"
 
 rule salmon_quant:
     input:
@@ -49,7 +51,10 @@ rule salmon_quant:
     output:
         "quants/{sample}/quant.sf"
     params:
-        dir = "quants/{sample}"
+        dir = "quants/{sample}",
+        threads = "2",
+	nboot = "30"
     shell:
-        "{SALMON} quant -i {input.index} -l UI -p 2 "
+        "{SALMON} quant -i {input.index} -l IU -p {params.threads} "
+	"--numBootstraps {nboot} "
         "-o {params.dir} -1 {input.r1} -2 {input.r2}"
