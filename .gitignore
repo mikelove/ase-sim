@@ -1,4 +1,7 @@
 .snakemake
+reads
+anno
+quants
 *.2bit
 *.rda
 *.Rout
