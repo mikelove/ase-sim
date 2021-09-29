@@ -1,4 +1,4 @@
-cmd_args=commandArgs(TRUE)
+cmd_args <- commandArgs(TRUE)
 fastafile <- cmd_args[1]
 grangesfile <- cmd_args[2]
 

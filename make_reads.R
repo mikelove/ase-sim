@@ -1,4 +1,4 @@
-cmd_args=commandArgs(TRUE)
+cmd_args <- commandArgs(TRUE)
 fasta <- cmd_args[1] # fasta file
 load(cmd_args[2]) # granges file
 n <- as.numeric(cmd_args[3]) # total number of samples

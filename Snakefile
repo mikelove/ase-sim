@@ -3,8 +3,7 @@ configfile: "config.json"
 SALMON = "~/bin/salmon-1.5.2_linux_x86_64/bin/salmon"
 
 rule all:
-    input:
-        expand("quants/{sample}/quant.sf", sample=config["samples"])
+    input: "txp_allelic_se.rda"
 
 rule make_expression:
     output:
@@ -56,5 +55,13 @@ rule salmon_quant:
 	nboot = "30"
     shell:
         "{SALMON} quant -i {input.index} -l IU -p {params.threads} "
-	"--numBootstraps {nboot} "
+	"--numBootstraps {params.nboot} "
         "-o {params.dir} -1 {input.r1} -2 {input.r2}"
+
+rule import_quants:
+    input: expand("quants/{sample}/quant.sf", sample=config["samples"])
+    params:
+        nsamp = len(config["samples"])
+    output: "txp_allelic_se.rda"
+    shell:
+        "R CMD BATCH --no-save --no-restore '--args {params.nsamp}' import_quants.R"
