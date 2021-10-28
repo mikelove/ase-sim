@@ -27,18 +27,23 @@ genome <- q[[1]]
 # STEP 1 - flip one basepair within each gene to make alt chromosomes
 
 # exons by transcript and gene, transcripts by gene
+g <- genes(edb)
 ebt <- exonsBy(edb, by="tx")
 ebg <- exonsBy(edb, by="gene")
 tbg <- transcriptsBy(edb, by="gene")
 
 # just standard chromosomes -- excluding Y
 chroms <- c("2L","2R","3L","3R","4","X")
+g <- keepSeqlevels(g, value=chroms, pruning.mode = "coarse")
 ebt <- keepSeqlevels(ebt, value=chroms, pruning.mode = "coarse")
 ebg <- keepSeqlevels(ebg, value=chroms, pruning.mode = "coarse")
 tbg <- keepSeqlevels(tbg, value=chroms, pruning.mode = "coarse")
 
 # order 'ebt' by 'tbg'
 ebt <- ebt[ mcols(unlist(tbg))$tx_name ]
+
+# subset to protein_coding ~14k and ncRNA ~2.4k
+table(g$gene_biotype)
 
 # pick 'nexons' exon per gene, then take the middle positions
 nexons <- 5
