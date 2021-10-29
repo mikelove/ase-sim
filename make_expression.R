@@ -8,6 +8,7 @@ library(dplyr)
 library(ggplot2)
 library(GenomicFeatures)
 library(Biostrings)
+library(rtracklayer)
 
 # set random seed
 set.seed(1)
@@ -39,11 +40,29 @@ ebt <- keepSeqlevels(ebt, value=chroms, pruning.mode = "coarse")
 ebg <- keepSeqlevels(ebg, value=chroms, pruning.mode = "coarse")
 tbg <- keepSeqlevels(tbg, value=chroms, pruning.mode = "coarse")
 
-# order 'ebt' by 'tbg'
-ebt <- ebt[ mcols(unlist(tbg))$tx_name ]
-
 # subset to protein_coding ~14k and ncRNA ~2.4k
+g <- g[sort(names(g))]
 table(g$gene_biotype)
+g <- g[g$gene_biotype %in% c("protein_coding","ncRNA")]
+
+# filtering the 'by-gene' objects
+ebg <- ebg[names(g)]
+tbg <- tbg[names(g)]
+
+# subset to genes not overlapping large simple tandem repeats (keeping ~14.8k genes)
+rep <- import("data/simpleRepeat_dm6_Aug2014.bed.gz")
+rep <- keepSeqlevels(rep, paste0("chr", chroms), pruning.mode="coarse")
+seqlevels(rep) <- sub("chr","",seqlevels(rep))
+big_rep <- rep[width(rep) >= 50]
+over_rep <- names(ebg)[overlapsAny(ebg, big_rep, minoverlap=50)]
+
+g <- g[!names(g) %in% over_rep]
+ebg <- ebg[!names(ebg) %in% over_rep]
+tbg <- tbg[!names(tbg) %in% over_rep]
+
+# filter, and order 'ebt' by 'tbg'
+ebt <- ebt[ mcols(unlist(tbg))$tx_name ]
+stopifnot(length(ebt) == sum(lengths(tbg)))
 
 # pick 'nexons' exon per gene, then take the middle positions
 nexons <- 5
