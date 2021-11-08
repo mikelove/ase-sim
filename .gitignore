@@ -2,6 +2,8 @@
 reads
 anno
 quants
+align
+bdgp6
 *.2bit
 *.rda
 *.Rout

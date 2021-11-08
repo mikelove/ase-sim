@@ -1,9 +1,11 @@
 configfile: "config.json"
 
-SALMON = "~/bin/salmon-1.5.2_linux_x86_64/bin/salmon"
+SALMON = "/proj/milovelab/bin/salmon-1.5.2_linux_x86_64/bin/salmon"
 
 rule all:
-    input: "txp_allelic_se.rda"
+    input: 
+        summarized_experiment = "txp_allelic_se.rda",
+        alignments = expand("align/{sample}.sorted.bam", sample=config["samples"])
 
 rule make_expression:
     output:
@@ -18,7 +20,7 @@ rule make_reads:
 	granges = "granges.rda"
     params:
         n = len(config["samples"]),
-	libsize = "1e5"
+	libsize = "50e6"
     output:
         expand("reads/{sample}_{read}.fasta", sample=config["samples"], read=config["reads"])
     shell:
@@ -39,7 +41,7 @@ rule salmon_index:
     input: "transcripts.fa"
     output: directory("anno/salmon-index-1.5.2")
     params:
-        threads = "2"
+        threads = "12"
     shell: "{SALMON} index --keepDuplicates -p {params.threads} -t {input} -i {output}"
 
 rule salmon_quant:
@@ -51,7 +53,7 @@ rule salmon_quant:
         "quants/{sample}/quant.sf"
     params:
         dir = "quants/{sample}",
-        threads = "2",
+        threads = "12",
 	nboot = "30"
     shell:
         "{SALMON} quant -i {input.index} -l IU -p {params.threads} "
@@ -65,3 +67,36 @@ rule import_quants:
     output: "txp_allelic_se.rda"
     shell:
         "R CMD BATCH --no-save --no-restore '--args {params.nsamp}' import_quants.R"
+
+rule hisat_index:
+    output: "bdgp6/genome.1.ht2"
+    shell:
+        """
+        wget https://genome-idx.s3.amazonaws.com/hisat/bdgp6.tar.gz
+        tar -xvf bdgp6.tar.gz
+        rm -f bdgp6.tar.gz
+        """
+
+rule hisat_align:
+    input:
+        index = "bdgp6/genome.1.ht2",
+        r1 = "reads/{sample}_1.shuffled.fa",
+        r2 = "reads/{sample}_2.shuffled.fa"
+    output: "align/{sample}.sam"
+    params:
+        threads = "12"
+    shell:
+        "hisat2 -p {params.threads} -f -x bdgp6/genome -1 {input.r1} -2 {input.r2} -S {output}"
+
+rule sort_alignments:
+    input: "align/{sample}.sam"
+    output: "align/{sample}.sorted.bam"
+    params:
+        unsorted = "align/{sample}.bam",
+        threads = "12"
+    shell:
+        """
+        samtools view -@ {params.threads} -bS {input} > {params.unsorted}
+        samtools sort -@ {params.threads} {params.unsorted} -o {output}
+        samtools index {output}
+        """
