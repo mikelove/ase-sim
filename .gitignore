@@ -1,10 +1,9 @@
 .snakemake
-reads
-anno
-quants
 align
-bdgp6
-bdgp6_sim
+anno
+data
+quants
+reads
 *.2bit
 *.rda
 *.Rout

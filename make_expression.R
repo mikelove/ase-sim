@@ -3,7 +3,8 @@ fastafile <- cmd_args[1]
 grangesfile <- cmd_args[2]
 reffile <- cmd_args[3]
 altfile <- cmd_args[4]
-hapfile <- cmd_args[5]
+vcffile <- cmd_args[5]
+hapfile <- cmd_args[6]
 
 library(AnnotationHub)
 library(ensembldb)
@@ -12,9 +13,6 @@ library(ggplot2)
 library(GenomicFeatures)
 library(Biostrings)
 library(rtracklayer)
-
-# set random seed
-set.seed(1)
 
 # use AHub to obtain Drosophila genes and genome
 ah <- AnnotationHub()
@@ -67,6 +65,9 @@ tbg <- tbg[!names(tbg) %in% over_rep]
 ebt <- ebt[ mcols(unlist(tbg))$tx_name ]
 stopifnot(length(ebt) == sum(lengths(tbg)))
 
+# set random seed for the sampling below
+set.seed(1)
+
 # pick 'nexons' exon per gene, then take the middle positions
 nexons <- 5
 exons <- unlist(ebg)
@@ -108,12 +109,16 @@ dna_alt <- lapply(names(dna), function(chr) {
 names(dna_alt) <- names(dna)
 dna_alt <- DNAStringSet(dna_alt)
 
-# repeat to output the alt alleles
+# repeat to record ref and  alt alleles
+ref_allele <- lapply(names(dna), function(chr) {
+  x <- spl_at[[chr]]
+  as( Views(dna[[chr]], x, x), "character" )
+})
 alt_allele <- lapply(names(dna), function(chr) {
   x <- spl_at[[chr]]
   as( complement(Views(dna[[chr]], x, x)), "character" )
 })
-names(alt_allele) <- names(dna)
+names(ref_allele) <- names(alt_allele) <- names(dna)
 
 # write a 2bit file for the alt chromosomes
 rtracklayer::export(dna_alt, con="drosophila_alt.2bit")
@@ -121,20 +126,35 @@ rtracklayer::export(dna_alt, con="drosophila_alt.2bit")
 # write out the ref genome for HISAT
 rtracklayer::export(dna, con=reffile)
 
-# write the alt alleles to a TSV
+# write the alt alleles to a TSV, first make a 1-based position table
 stopifnot(all(lengths(spl_at) == lengths(alt_allele)))
 alt_chr <- rep(names(spl_at), lengths(spl_at))
 alt_table <- data.frame(type=rep("single", length(alt_chr)),
                         chr=alt_chr,
                         pos=unlist(spl_at),
+                        ref=unlist(ref_allele),
                         alt=unlist(alt_allele))
 alt_table <- alt_table[order(alt_table$chr, alt_table$pos),]
 rownames(alt_table) <- paste0("rs",seq_along(alt_chr))
-write.table(alt_table, file="drosophila_alt.tsv", quote=FALSE, sep="\t", col.names=FALSE)
 
+# HISAT requires a 0-based position, so alter the 1-based table
 alt_table0 <- alt_table
-alt_table0$pos <- alt_table0$pos - 1 # for HISAT snp files
+alt_table0$pos <- alt_table0$pos - 1 
 write.table(alt_table0, file=altfile, quote=FALSE, sep="\t", col.names=FALSE)
+
+# VCF files, one per chrom, for WASP
+vcf_table <- data.frame(CHROM=alt_table$chr, POS=alt_table$pos, ID=rownames(alt_table),
+                        REF=alt_table$ref, ALT=alt_table$alt,
+                        QUAL=".", FILTER="PASS", INFO=".", FORMAT="GT", sample="0|1")
+write.table(vcf_table[vcf_table$CHROM == "2L",], file=vcffile,
+            quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
+system(paste0("sed -i -e 's/CHROM/#CHROM/' ",vcffile))
+for (chr in names(dna)[-1]) {
+  vcffile_other <- sub("2L",chr,vcffile)
+  write.table(vcf_table[vcf_table$CHROM == chr,], file=vcffile_other,
+              quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
+  system(paste0("sed -i -e 's/CHROM/#CHROM/' ",vcffile_other))
+}
 
 haps <- split(rownames(alt_table0), alt_table0$chr)
 haps <- sapply(haps, paste0, collapse=",")

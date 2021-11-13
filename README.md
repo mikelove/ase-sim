@@ -8,10 +8,23 @@ Version: 0.0.3
 
 ## Software versions used:
 
-* `anaconda/2019.10` (for snakemake)
+* `anaconda/2019.10` (for Snakemake)
 * `r/4.1.0`
 * `hisat2/2.2.1`
 * `samtools/1.13`
+* `wasp/2019-12`
+
+## Directories
+
+The following directories are needed
+
+```
+align
+anno
+data
+quants
+reads
+```
 
 The following was used to build the splice site file that is included in the repo.
 

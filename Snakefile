@@ -11,12 +11,13 @@ rule make_expression:
     output:
         txps_fa = "transcripts.fa",
 	granges = "granges.rda",
-        ref = "drosophila_ref.fasta",
-        alt = "drosophila_alt_zero-based.tsv",
-        haps = "drosophila_alt.haps"
+        ref = "data/drosophila_ref.fasta",
+        alt = "data/drosophila_alt_zero-based.tsv",
+        vcf = "data/drosophila_2L.vcf",
+        haps = "data/drosophila_alt.haps"
     shell:
         "R CMD BATCH --no-save --no-restore '--args {output.txps_fa} {output.granges} "
-        "{output.ref} {output.alt} {output.haps}' make_expression.R"
+        "{output.ref} {output.alt} {output.vcf} {output.haps}' make_expression.R"
 
 rule make_reads:
     input:
@@ -73,26 +74,26 @@ rule import_quants:
         "R CMD BATCH --no-save --no-restore '--args {params.nsamp}' import_quants.R"
 
 rule hisat_ss:
-    input: "Drosophila_melanogaster.BDGP6.28.100.ss.gz"
-    output: "Drosophila_melanogaster.BDGP6.28.100.ss"
+    input: "data/Drosophila_melanogaster.BDGP6.28.100.ss.gz"
+    output: "data/Drosophila_melanogaster.BDGP6.28.100.ss"
     shell:
         "gunzip -c {input} > {output}"
 
 rule hisat_index:
     input: 
-        ref = "drosophila_ref.fasta",
-        alt = "drosophila_alt_zero-based.tsv",
-        haps = "drosophila_alt.haps",
-        ss = "Drosophila_melanogaster.BDGP6.28.100.ss"
-    output: "bdgp6_sim/genome.1.ht2"
+        ref = "data/drosophila_ref.fasta",
+        alt = "data/drosophila_alt_zero-based.tsv",
+        haps = "data/drosophila_alt.haps",
+        ss = "data/Drosophila_melanogaster.BDGP6.28.100.ss"
+    output: "anno/bdgp6_sim/genome.1.ht2"
     params:
         threads = "12"
     shell:
-        "hisat2-build -p {params.threads} -f --snp {input.alt} --haplotype {input.haps} --ss {input.ss} {input.ref} bdgp6_sim/genome"
+        "hisat2-build -p {params.threads} -f --snp {input.alt} --haplotype {input.haps} --ss {input.ss} {input.ref} anno/bdgp6_sim/genome"
 
 rule hisat_align:
     input:
-        index = "bdgp6_sim/genome.1.ht2",
+        index = "anno/bdgp6_sim/genome.1.ht2",
         r1 = "reads/{sample}_1.shuffled.fa",
         r2 = "reads/{sample}_2.shuffled.fa"
     output: "align/{sample}.sam"
@@ -112,4 +113,16 @@ rule sort_alignments:
         samtools view -@ {params.threads} -bS {input} > {params.unsorted}
         samtools sort -@ {params.threads} {params.unsorted} -o {output}
         samtools index {output}
+        rm {input}
         """
+
+rule snp2h5:
+    input: "data/drosophila_2L.vcf"
+    output:
+        hap = "data/drosophila_hap.h5",
+        index = "data/drosophila_snp_index.h5",
+        tab = "data/drosophila_snp_tab.h5"
+    shell:
+        "snp2h5 --chrom data/drosophila_chromInfo.txt "
+        "--format vcf --haplotype {output.hap} --snp_index {output.index} --snp_tab {output.tab} "
+        "data/drosophila_*.vcf "
