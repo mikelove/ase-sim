@@ -1,2 +1,2 @@
-samples : [sample_01, sample_02, sample_03, sample_04]
+samples : [sample_01, sample_02]
 reads : [1,2]

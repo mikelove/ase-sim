@@ -1,6 +1,9 @@
 cmd_args <- commandArgs(TRUE)
 fastafile <- cmd_args[1]
 grangesfile <- cmd_args[2]
+reffile <- cmd_args[3]
+altfile <- cmd_args[4]
+hapfile <- cmd_args[5]
 
 library(AnnotationHub)
 library(ensembldb)
@@ -96,21 +99,54 @@ spl_at <- split(at, seqnames(which_exons))
 dna <- import(genome)[c("2L","2R","3L","3R","4","X")]
 
 # flip a letter within each gene
-dna_alt <- lapply(names(dna), function(c) {
-  x <- spl_at[[c]]
+dna_alt <- lapply(names(dna), function(chr) {
+  x <- spl_at[[chr]]
   # Views() is a lightweight way to pull out positions of a DNAString
-  flip <- as( complement(Views(dna[[c]], x, x)), "character" )
-  replaceLetterAt(dna[[c]], x, letter=flip)
+  flip <- as( complement(Views(dna[[chr]], x, x)), "character" )
+  replaceLetterAt(dna[[chr]], x, letter=flip)
 })
 names(dna_alt) <- names(dna)
 dna_alt <- DNAStringSet(dna_alt)
 
+# repeat to output the alt alleles
+alt_allele <- lapply(names(dna), function(chr) {
+  x <- spl_at[[chr]]
+  as( complement(Views(dna[[chr]], x, x)), "character" )
+})
+names(alt_allele) <- names(dna)
+
 # write a 2bit file for the alt chromosomes
 rtracklayer::export(dna_alt, con="drosophila_alt.2bit")
 
+# write out the ref genome for HISAT
+rtracklayer::export(dna, con=reffile)
+
+# write the alt alleles to a TSV
+stopifnot(all(lengths(spl_at) == lengths(alt_allele)))
+alt_chr <- rep(names(spl_at), lengths(spl_at))
+alt_table <- data.frame(type=rep("single", length(alt_chr)),
+                        chr=alt_chr,
+                        pos=unlist(spl_at),
+                        alt=unlist(alt_allele))
+alt_table <- alt_table[order(alt_table$chr, alt_table$pos),]
+rownames(alt_table) <- paste0("rs",seq_along(alt_chr))
+write.table(alt_table, file="drosophila_alt.tsv", quote=FALSE, sep="\t", col.names=FALSE)
+
+alt_table0 <- alt_table
+alt_table0$pos <- alt_table0$pos - 1 # for HISAT snp files
+write.table(alt_table0, file=altfile, quote=FALSE, sep="\t", col.names=FALSE)
+
+haps <- split(rownames(alt_table0), alt_table0$chr)
+haps <- sapply(haps, paste0, collapse=",")
+haps_table <- data.frame(chr=names(haps),
+                         pos1=0,
+                         post2=width(dna),
+                         snps=haps,
+                         row.names=paste0("ht",seq_along(haps)))
+write.table(haps_table, file=hapfile, quote=FALSE, sep="\t", col.names=FALSE)
+
 # point to a 2bit file
 genome_alt <- TwoBitFile("drosophila_alt.2bit")
-
 # extract transcript sequence for both alleles
 cdna <- extractTranscriptSeqs(genome, ebt)
 cdna_alt <- extractTranscriptSeqs(genome_alt, ebt)

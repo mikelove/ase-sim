@@ -10,9 +10,13 @@ rule all:
 rule make_expression:
     output:
         txps_fa = "transcripts.fa",
-	granges = "granges.rda"
+	granges = "granges.rda",
+        ref = "drosophila_ref.fasta",
+        alt = "drosophila_alt_zero-based.tsv",
+        haps = "drosophila_alt.haps"
     shell:
-        "R CMD BATCH --no-save --no-restore '--args {output.txps_fa} {output.granges}' make_expression.R"
+        "R CMD BATCH --no-save --no-restore '--args {output.txps_fa} {output.granges} "
+        "{output.ref} {output.alt} {output.haps}' make_expression.R"
 
 rule make_reads:
     input:
@@ -68,25 +72,34 @@ rule import_quants:
     shell:
         "R CMD BATCH --no-save --no-restore '--args {params.nsamp}' import_quants.R"
 
-rule hisat_index:
-    output: "bdgp6/genome.1.ht2"
+rule hisat_ss:
+    input: "Drosophila_melanogaster.BDGP6.28.100.ss.gz"
+    output: "Drosophila_melanogaster.BDGP6.28.100.ss"
     shell:
-        """
-        wget https://genome-idx.s3.amazonaws.com/hisat/bdgp6.tar.gz
-        tar -xvf bdgp6.tar.gz
-        rm -f bdgp6.tar.gz
-        """
+        "gunzip -c {input} > {output}"
+
+rule hisat_index:
+    input: 
+        ref = "drosophila_ref.fasta",
+        alt = "drosophila_alt_zero-based.tsv",
+        haps = "drosophila_alt.haps",
+        ss = "Drosophila_melanogaster.BDGP6.28.100.ss"
+    output: "bdgp6_sim/genome.1.ht2"
+    params:
+        threads = "12"
+    shell:
+        "hisat2-build -p {params.threads} -f --snp {input.alt} --haplotype {input.haps} --ss {input.ss} {input.ref} bdgp6_sim/genome"
 
 rule hisat_align:
     input:
-        index = "bdgp6/genome.1.ht2",
+        index = "bdgp6_sim/genome.1.ht2",
         r1 = "reads/{sample}_1.shuffled.fa",
         r2 = "reads/{sample}_2.shuffled.fa"
     output: "align/{sample}.sam"
     params:
         threads = "12"
     shell:
-        "hisat2 -p {params.threads} -f -x bdgp6/genome -1 {input.r1} -2 {input.r2} -S {output}"
+        "hisat2 -p {params.threads} -f -x bdgp6_sim/genome -1 {input.r1} -2 {input.r2} -S {output}"
 
 rule sort_alignments:
     input: "align/{sample}.sam"

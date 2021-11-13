@@ -4,6 +4,7 @@ anno
 quants
 align
 bdgp6
+bdgp6_sim
 *.2bit
 *.rda
 *.Rout
@@ -11,3 +12,7 @@ bdgp6
 *.fa
 *.txt
 *.png
+*.tsv
+*.out
+*.ss
+*.haps
