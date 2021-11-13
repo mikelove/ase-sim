@@ -5,19 +5,21 @@ SALMON = "/proj/milovelab/bin/salmon-1.5.2_linux_x86_64/bin/salmon"
 rule all:
     input: 
         summarized_experiment = "txp_allelic_se.rda",
-        alignments = expand("align/{sample}.sorted.bam", sample=config["samples"])
+        alignments = expand("align/{sample}.sorted.bam", sample=config["samples"]),
+        seq = "data/drosophila_seq.h5"
 
 rule make_expression:
     output:
         txps_fa = "transcripts.fa",
 	granges = "granges.rda",
         ref = "data/drosophila_ref.fasta",
+        chr = "data/drosophila_chr_2L.fasta",
         alt = "data/drosophila_alt_zero-based.tsv",
-        vcf = "data/drosophila_2L.vcf",
+        vcf = "data/drosophila_chr_2L.vcf",
         haps = "data/drosophila_alt.haps"
     shell:
         "R CMD BATCH --no-save --no-restore '--args {output.txps_fa} {output.granges} "
-        "{output.ref} {output.alt} {output.vcf} {output.haps}' make_expression.R"
+        "{output.ref} {output.chr} {output.alt} {output.vcf} {output.haps}' make_expression.R"
 
 rule make_reads:
     input:
@@ -117,7 +119,7 @@ rule sort_alignments:
         """
 
 rule snp2h5:
-    input: "data/drosophila_2L.vcf"
+    input: "data/drosophila_chr_2L.vcf"
     output:
         hap = "data/drosophila_hap.h5",
         index = "data/drosophila_snp_index.h5",
@@ -126,3 +128,10 @@ rule snp2h5:
         "snp2h5 --chrom data/drosophila_chromInfo.txt "
         "--format vcf --haplotype {output.hap} --snp_index {output.index} --snp_tab {output.tab} "
         "data/drosophila_*.vcf "
+
+rule fasta_h5:
+    input: "data/drosophila_chr_2L.fasta"
+    output: "data/drosophila_seq.h5"
+    shell: 
+        "fasta2h5 --chrom data/drosophila_chromInfo.txt "
+        "--seq {output} data/drosophila_chr_*.fasta"

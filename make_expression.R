@@ -2,9 +2,10 @@ cmd_args <- commandArgs(TRUE)
 fastafile <- cmd_args[1]
 grangesfile <- cmd_args[2]
 reffile <- cmd_args[3]
-altfile <- cmd_args[4]
-vcffile <- cmd_args[5]
-hapfile <- cmd_args[6]
+chrfile <- cmd_args[4]
+altfile <- cmd_args[5]
+vcffile <- cmd_args[6]
+hapfile <- cmd_args[7]
 
 library(AnnotationHub)
 library(ensembldb)
@@ -26,6 +27,9 @@ edb <- q[[1]]
 q <- query(ah, c("BDGP6.28",release,"TwoBit","dna_sm"))
 genome <- q[[1]]
 
+# define 'standard chromosomes', exluding Y
+chroms <- c("2L","2R","3L","3R","4","X")
+
 # STEP 1 - flip one basepair within each gene to make alt chromosomes
 
 # exons by transcript and gene, transcripts by gene
@@ -35,7 +39,6 @@ ebg <- exonsBy(edb, by="gene")
 tbg <- transcriptsBy(edb, by="gene")
 
 # just standard chromosomes -- excluding Y
-chroms <- c("2L","2R","3L","3R","4","X")
 g <- keepSeqlevels(g, value=chroms, pruning.mode = "coarse")
 ebt <- keepSeqlevels(ebt, value=chroms, pruning.mode = "coarse")
 ebg <- keepSeqlevels(ebg, value=chroms, pruning.mode = "coarse")
@@ -97,7 +100,7 @@ at <- mid(which_exons)
 spl_at <- split(at, seqnames(which_exons))
 
 # make DNAStringSet of the genome (only standard chromosomes)
-dna <- import(genome)[c("2L","2R","3L","3R","4","X")]
+dna <- import(genome)[chroms]
 
 # flip a letter within each gene
 dna_alt <- lapply(names(dna), function(chr) {
@@ -121,10 +124,24 @@ alt_allele <- lapply(names(dna), function(chr) {
 names(ref_allele) <- names(alt_allele) <- names(dna)
 
 # write a 2bit file for the alt chromosomes
-rtracklayer::export(dna_alt, con="drosophila_alt.2bit")
+rtracklayer::export(dna_alt, con="data/drosophila_alt.2bit")
+
+# point to a 2bit file
+genome_alt <- TwoBitFile("data/drosophila_alt.2bit")
+
+# extract transcript sequence for both alleles
+cdna <- extractTranscriptSeqs(genome, ebt)
+cdna_alt <- extractTranscriptSeqs(genome_alt, ebt)
+
+# STEP 2 - write out various genome-based files for downstream tools
 
 # write out the ref genome for HISAT
 rtracklayer::export(dna, con=reffile)
+
+# write out individual chroms for WASP
+for (chr in names(dna)) {
+  rtracklayer::export(dna[chr], con=sub("2L",chr,chrfile))
+}
 
 # write the alt alleles to a TSV, first make a 1-based position table
 stopifnot(all(lengths(spl_at) == lengths(alt_allele)))
@@ -146,16 +163,13 @@ write.table(alt_table0, file=altfile, quote=FALSE, sep="\t", col.names=FALSE)
 vcf_table <- data.frame(CHROM=alt_table$chr, POS=alt_table$pos, ID=rownames(alt_table),
                         REF=alt_table$ref, ALT=alt_table$alt,
                         QUAL=".", FILTER="PASS", INFO=".", FORMAT="GT", sample="0|1")
-write.table(vcf_table[vcf_table$CHROM == "2L",], file=vcffile,
-            quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
-system(paste0("sed -i -e 's/CHROM/#CHROM/' ",vcffile))
-for (chr in names(dna)[-1]) {
-  vcffile_other <- sub("2L",chr,vcffile)
-  write.table(vcf_table[vcf_table$CHROM == chr,], file=vcffile_other,
+for (chr in names(dna)) {
+  write.table(vcf_table[vcf_table$CHROM == chr,], file=sub("2L",chr,vcffile),
               quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
-  system(paste0("sed -i -e 's/CHROM/#CHROM/' ",vcffile_other))
+  system(paste0("sed -i -e 's/CHROM/#CHROM/' ",sub("2L",chr,vcffile)))
 }
 
+# the haplotype files, for HISAT
 haps <- split(rownames(alt_table0), alt_table0$chr)
 haps <- sapply(haps, paste0, collapse=",")
 haps_table <- data.frame(chr=names(haps),
@@ -165,13 +179,7 @@ haps_table <- data.frame(chr=names(haps),
                          row.names=paste0("ht",seq_along(haps)))
 write.table(haps_table, file=hapfile, quote=FALSE, sep="\t", col.names=FALSE)
 
-# point to a 2bit file
-genome_alt <- TwoBitFile("drosophila_alt.2bit")
-# extract transcript sequence for both alleles
-cdna <- extractTranscriptSeqs(genome, ebt)
-cdna_alt <- extractTranscriptSeqs(genome_alt, ebt)
-
-# STEP 2 - create allelic read counts
+# STEP 3 - create allelic read counts
 
 # group transcripts by TSS
 tss_pos <- start(resize(tbg, width=1))
@@ -210,7 +218,7 @@ for (i in seq_along(genes_to_alter)) {
   abundance[neg_idx] <- abundance[neg_idx] - 1/length(neg_idx)
 }
 
-# STEP 3 write out files
+# STEP 4 write out simulation files
 
 # combine the original and altered transcripts
 cdna_both <- c(cdna, cdna_alt)
@@ -239,6 +247,7 @@ mcols(txps)$abundance <- abundance
 mcols(txps)$tss <- tss_pos_vector
 mcols(txps)$width <- width(cdna)
 mcols(txps)$snp_loc <- at_per_gene[ mcols(txps)$gene_id ]
+
 # FASTA and GRanges (with abundance)
 writeXStringSet(cdna_both, file=fastafile)
 save(ebt, tbg, txps, file=grangesfile)
