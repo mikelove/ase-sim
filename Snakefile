@@ -93,7 +93,7 @@ rule hisat_index:
     params:
         threads = "12"
     shell:
-        "hisat2-build -p {params.threads} -f --snp {input.alt} --haplotype {input.haps} "
+        "hisat2-build-s -p {params.threads} -f --snp {input.alt} --haplotype {input.haps} "
         "--ss {input.ss} {input.ref} anno/bdgp6_sim/genome"
 
 rule hisat_align:

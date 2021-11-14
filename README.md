@@ -8,7 +8,6 @@ Version: 0.0.3
 
 ## Software versions used:
 
-* `anaconda/2019.10` (for Snakemake)
 * `r/4.1.0`
 * `hisat2/2.2.1`
 * `samtools/1.13`
@@ -26,6 +25,12 @@ quants
 reads
 wasp
 ```
+
+## Provenance of included files
+
+`simpleRepeat_dm6_Aug2014.bed` is from UCSC Genome Browser:
+
+<https://genome.ucsc.edu/cgi-bin/hgTables?db=dm6&hgta_group=varRep&hgta_track=simpleRepeat&hgta_table=simpleRepeat&hgta_doSchema=describe+table+schema>
 
 The following was used to build the splice site file that is included in the repo.
 
