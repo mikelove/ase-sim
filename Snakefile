@@ -2,11 +2,13 @@ configfile: "config.json"
 
 SALMON = "/proj/milovelab/bin/salmon-1.5.2_linux_x86_64/bin/salmon"
 
+BAM2H5 = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/CHT/bam2h5.py"
+
 rule all:
     input: 
         summarized_experiment = "txp_allelic_se.rda",
-        alignments = expand("align/{sample}.sorted.bam", sample=config["samples"]),
-        seq = "data/drosophila_seq.h5"
+        alignments = expand("align/{sample}.bam", sample=config["samples"]),
+        wasp = expand("wasp/alt_as_counts.{sample}.h5", sample=config["samples"])
 
 rule make_expression:
     output:
@@ -91,47 +93,75 @@ rule hisat_index:
     params:
         threads = "12"
     shell:
-        "hisat2-build -p {params.threads} -f --snp {input.alt} --haplotype {input.haps} --ss {input.ss} {input.ref} anno/bdgp6_sim/genome"
+        "hisat2-build -p {params.threads} -f --snp {input.alt} --haplotype {input.haps} "
+        "--ss {input.ss} {input.ref} anno/bdgp6_sim/genome"
 
 rule hisat_align:
     input:
         index = "anno/bdgp6_sim/genome.1.ht2",
         r1 = "reads/{sample}_1.shuffled.fa",
         r2 = "reads/{sample}_2.shuffled.fa"
-    output: "align/{sample}.sam"
+    output: "align/{sample}.bam"
     params:
-        threads = "12"
-    shell:
-        "hisat2 -p {params.threads} -f -x bdgp6_sim/genome -1 {input.r1} -2 {input.r2} -S {output}"
-
-rule sort_alignments:
-    input: "align/{sample}.sam"
-    output: "align/{sample}.sorted.bam"
-    params:
-        unsorted = "align/{sample}.bam",
-        threads = "12"
+        threads = "12",
+        mem_per_thread = "1G"
     shell:
         """
-        samtools view -@ {params.threads} -bS {input} > {params.unsorted}
-        samtools sort -@ {params.threads} {params.unsorted} -o {output}
+        hisat2 -p {params.threads} -f -x anno/bdgp6_sim/genome \
+          -1 {input.r1} -2 {input.r2} | samtools sort -@ {params.threads} \
+          -m {params.mem_per_thread} -o {output}
         samtools index {output}
-        rm {input}
         """
 
-rule snp2h5:
+rule filter_and_tally_alignments:
+    input: "align/{sample}.bam"
+    output: 
+        lowqual = "align/{sample}.lowqual",
+        filter = "align/{sample}.filt.bam"
+    params:
+        threads = "12",
+        mem_per_thread = "1G"
+    shell:
+        """
+        samtools view {input} | awk '$5 < 60 {{print $1}}' | grep -o '_.|' | \
+          sed 's/[_|]//g' | sort | uniq -c > {output.lowqual}
+        samtools view -q 60 -@ {params.threads} -m {params.mem_per_thread} -b {input} > {output.filter}
+        """
+
+rule wasp_snp2h5:
     input: "data/drosophila_chr_2L.vcf"
     output:
-        hap = "data/drosophila_hap.h5",
         index = "data/drosophila_snp_index.h5",
-        tab = "data/drosophila_snp_tab.h5"
+        tab = "data/drosophila_snp_tab.h5",
+        hap = "data/drosophila_haps.h5"
     shell:
         "snp2h5 --chrom data/drosophila_chromInfo.txt "
-        "--format vcf --haplotype {output.hap} --snp_index {output.index} --snp_tab {output.tab} "
+        "--format vcf --snp_index {output.index} --snp_tab {output.tab} --haplotype {output.hap} "
         "data/drosophila_*.vcf "
 
-rule fasta_h5:
+rule wasp_fasta_h5:
     input: "data/drosophila_chr_2L.fasta"
     output: "data/drosophila_seq.h5"
     shell: 
         "fasta2h5 --chrom data/drosophila_chromInfo.txt "
         "--seq {output} data/drosophila_chr_*.fasta"
+
+rule wasp_read_count:
+    input:
+        index = "data/drosophila_snp_index.h5",
+        tab = "data/drosophila_snp_tab.h5",
+        hap = "data/drosophila_haps.h5",
+        bam = "align/{sample}.filt.bam"
+    output:
+        ref = "wasp/ref_as_counts.{sample}.h5",
+        alt = "wasp/alt_as_counts.{sample}.h5",
+        other = "wasp/other_as_counts.{sample}.h5",
+        count = "wasp/read_counts.{sample}.h5"
+    shell:
+        """
+        {BAM2H5} --chrom data/drosophila_chromInfo.txt \
+         --snp_index {input.index} --snp_tab {input.tab} --haplotype {input.hap} \
+         --individual sample --ref_as_counts {output.ref} --alt_as_counts {output.alt} \
+         --other_as_counts {output.other} --read_counts {output.count} \
+         {input.bam}
+         """

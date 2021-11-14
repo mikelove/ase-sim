@@ -24,6 +24,7 @@ anno
 data
 quants
 reads
+wasp
 ```
 
 The following was used to build the splice site file that is included in the repo.
