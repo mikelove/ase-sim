@@ -126,6 +126,7 @@ rule filter_and_tally_alignments:
         samtools view {input} | awk '$5 < 60 {{print $1}}' | grep -o '_.|' | \
           sed 's/[_|]//g' | sort | uniq -c > {output.lowqual}
         samtools view -q 60 -@ {params.threads} -m {params.mem_per_thread} -b {input} > {output.filter}
+        samtools index {output.filter}
         """
 
 rule wasp_snp2h5:
@@ -150,18 +151,18 @@ rule wasp_read_count:
     input:
         index = "data/drosophila_snp_index.h5",
         tab = "data/drosophila_snp_tab.h5",
-        hap = "data/drosophila_haps.h5",
         bam = "align/{sample}.filt.bam"
     output:
         ref = "wasp/ref_as_counts.{sample}.h5",
         alt = "wasp/alt_as_counts.{sample}.h5",
         other = "wasp/other_as_counts.{sample}.h5",
-        count = "wasp/read_counts.{sample}.h5"
+        count = "wasp/read_counts.{sample}.h5",
+        log = "wasp/{sample}.log"
     shell:
         """
         {BAM2H5} --chrom data/drosophila_chromInfo.txt \
-         --snp_index {input.index} --snp_tab {input.tab} --haplotype {input.hap} \
-         --individual sample --ref_as_counts {output.ref} --alt_as_counts {output.alt} \
+         --snp_index {input.index} --snp_tab {input.tab} \
+         --ref_as_counts {output.ref} --alt_as_counts {output.alt} \
          --other_as_counts {output.other} --read_counts {output.count} \
-         {input.bam}
+         {input.bam} 2> {output.log}
          """

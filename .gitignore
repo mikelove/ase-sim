@@ -4,6 +4,7 @@ anno
 data
 quants
 reads
+wasp
 *.2bit
 *.rda
 *.Rout
