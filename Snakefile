@@ -4,12 +4,13 @@ SALMON = "/proj/milovelab/bin/salmon-1.5.2_linux_x86_64/bin/salmon"
 
 BAM2H5 = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/CHT/bam2h5.py"
 
+EXTRACTHAP = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/CHT/extract_haplotype_read_counts.py"
+
 rule all:
     input: 
         summarized_experiment = "txp_allelic_se.rda",
         alignments = expand("align/{sample}.bam", sample=config["samples"]),
-        wasp = expand("wasp/alt_as_counts.{sample}.h5", sample=config["samples"]),
-        gp = "data/drosophila_genoprob.h5"
+        wasp = expand("wasp/hap_read_counts.{sample}.h5", sample=config["samples"]),
 
 rule make_expression:
     output:
@@ -161,13 +162,35 @@ rule wasp_read_count:
         ref = "wasp/ref_as_counts.{sample}.h5",
         alt = "wasp/alt_as_counts.{sample}.h5",
         other = "wasp/other_as_counts.{sample}.h5",
-        count = "wasp/read_counts.{sample}.h5",
-        log = "wasp/{sample}.log"
+        count = "wasp/read_counts.{sample}.h5"
     shell:
         """
         {BAM2H5} --chrom data/drosophila_chromInfo.txt \
          --snp_index {input.index} --snp_tab {input.tab} \
          --ref_as_counts {output.ref} --alt_as_counts {output.alt} \
          --other_as_counts {output.other} --read_counts {output.count} \
-         {input.bam} 2> {output.log}
+         {input.bam} 2> /dev/null
          """
+
+rule wasp_extract:
+    input:
+        genoprob = "data/drosophila_genoprob.h5",
+        hap = "data/drosophila_haps.h5",
+        index = "data/drosophila_snp_index.h5",
+        tab = "data/drosophila_snp_tab.h5",
+        ref = "wasp/ref_as_counts.{sample}.h5",
+        alt = "wasp/alt_as_counts.{sample}.h5",
+        other = "wasp/other_as_counts.{sample}.h5",
+        count = "wasp/read_counts.{sample}.h5",
+        tt = "data/drosophila_test_target.txt"
+    output: "wasp/hap_read_counts.{sample}.h5"
+    shell:
+        """
+        {EXTRACTHAP}  --chrom data/drosophila_chromInfo.txt \
+         --geno_prob {input.genoprob} --haplotype {input.hap} \
+         --snp_index {input.index} --snp_tab {input.tab} \
+         --samples data/samples --individual sample \
+         --ref_as_counts {input.ref} --alt_as_counts {input.alt} \
+         --other_as_counts {input.other} --read_counts {input.count} \
+         {input.tt} > {output}
+        """
