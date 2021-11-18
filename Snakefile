@@ -3,14 +3,15 @@ configfile: "config.json"
 SALMON = "/proj/milovelab/bin/salmon-1.5.2_linux_x86_64/bin/salmon"
 
 BAM2H5 = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/CHT/bam2h5.py"
-
 EXTRACTHAP = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/CHT/extract_haplotype_read_counts.py"
+UPDATEDEP = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/CHT/update_total_depth.py"
+UPDATEHET = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/CHT/update_het_probs.py"
 
 rule all:
     input: 
         summarized_experiment = "txp_allelic_se.rda",
         alignments = expand("align/{sample}.bam", sample=config["samples"]),
-        wasp = expand("wasp/hap_read_counts.{sample}.h5", sample=config["samples"]),
+        wasp = expand("wasp/hap_read_counts.{sample}.hetp", sample=config["samples"]),
 
 rule make_expression:
     output:
@@ -183,7 +184,7 @@ rule wasp_extract:
         other = "wasp/other_as_counts.{sample}.h5",
         count = "wasp/read_counts.{sample}.h5",
         tt = "data/drosophila_test_target.txt"
-    output: "wasp/hap_read_counts.{sample}.h5"
+    output: "wasp/hap_read_counts.{sample}.txt"
     shell:
         """
         {EXTRACTHAP}  --chrom data/drosophila_chromInfo.txt \
@@ -194,3 +195,26 @@ rule wasp_extract:
          --other_as_counts {input.other} --read_counts {input.count} \
          {input.tt} > {output}
         """
+
+rule wasp_adjust_read_count:
+    input:
+        seq = "data/drosophila_seq.h5",
+        hap_counts = expand("wasp/hap_read_counts.{sample}.txt", sample=config["samples"])
+    output:
+        expand("wasp/hap_read_counts.{sample}.adj", sample=config["samples"])
+    shell:
+        """
+        ls -1 {input.hap_counts} > wasp/preadj
+        sed 's/.txt/.adj/' wasp/preadj > wasp/postadj
+        {UPDATEDEP} --seq {input.seq} wasp/preadj wasp/postadj
+        """
+
+rule wasp_adjust_het_prob:
+    input:
+        ref = "wasp/ref_as_counts.{sample}.h5",
+        alt = "wasp/alt_as_counts.{sample}.h5",
+        adj = "wasp/hap_read_counts.{sample}.adj"
+    output: "wasp/hap_read_counts.{sample}.hetp"
+    shell:
+        "{UPDATEHET} --ref_as_counts {input.ref} --alt_as_counts {input.alt} "
+        "{input.adj} {output}"
