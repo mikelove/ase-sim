@@ -6,6 +6,7 @@ chrfile <- cmd_args[4]
 altfile <- cmd_args[5]
 vcffile <- cmd_args[6]
 hapfile <- cmd_args[7]
+testtargetfile <- cmd_args[8]
 
 library(AnnotationHub)
 library(ensembldb)
@@ -87,8 +88,12 @@ length(which_id) # less than nexons x ngenes, bc replace=FALSE
 
 # grab the exons
 which_exons <- exons[match(which_id, mcols(exons)$exon_id)]
+
 # grab the middle position
 at <- mid(which_exons)
+
+# split the positions per gene
+at_per_gene <- as(split(at, names(which_exons)), "IntegerList")
 
 # plot the positions
 ## dat <- data.frame(at=at, chrom=seqnames(which_exons))
@@ -121,7 +126,7 @@ alt_allele <- lapply(names(dna), function(chr) {
   x <- spl_at[[chr]]
   as( complement(Views(dna[[chr]], x, x)), "character" )
 })
-names(ref_allele) <- names(alt_allele) <- names(dna)
+names(ref_allele) <- names(alt_allele) <- nannmes(dna)
 
 # write a 2bit file for the alt chromosomes
 rtracklayer::export(dna_alt, con="data/drosophila_alt.2bit")
@@ -162,7 +167,7 @@ write.table(alt_table0, file=altfile, quote=FALSE, sep="\t", col.names=FALSE)
 # VCF files, one per chrom, for WASP
 vcf_table <- data.frame(CHROM=alt_table$chr, POS=alt_table$pos, ID=rownames(alt_table),
                         REF=alt_table$ref, ALT=alt_table$alt,
-                        QUAL=".", FILTER="PASS", INFO=".", FORMAT="GT", sample="0|1")
+                        QUAL=".", FILTER="PASS", INFO=".", FORMAT="GT:GL", sample="0|1:-100,0,-100")
 for (chr in names(dna)) {
   write.table(vcf_table[vcf_table$CHROM == chr,], file=sub("2L",chr,vcffile),
               quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
@@ -178,6 +183,24 @@ haps_table <- data.frame(chr=names(haps),
                          snps=haps,
                          row.names=paste0("ht",seq_along(haps)))
 write.table(haps_table, file=hapfile, quote=FALSE, sep="\t", col.names=FALSE)
+
+# the test SNP and target regions for WASP
+red_ebg <- reduce(ebg)
+left_pos <- sapply(at_per_gene, min)
+wasp_test_target <- data.frame(
+  chr=seqnames(g),
+  pos=left_pos,
+  endpos=left_pos,
+  strand="+",
+  name=paste0(seqnames(g),".",left_pos),
+  tstart=sapply(start(red_ebg), paste0, collapse=";"),
+  tend=sapply(end(red_ebg), paste0, collapse=";")
+)
+wasp_test_target <- merge(wasp_test_target, alt_table)
+wasp_test_target <- wasp_test_target[,c("chr","pos","endpos","ref","alt",
+                                        "strand","name","tstart","tend")]
+write.table(wasp_test_target, file=testtargetfile, quote=FALSE,
+            sep=" ", row.names=FALSE, col.names=FALSE)
 
 # STEP 3 - create allelic read counts
 
@@ -210,10 +233,10 @@ names(abundance) <- names(ebt)
 genes_to_alter <- sample(names(tbg)[txp_idx], 1000)
 for (i in seq_along(genes_to_alter)) {
   if (i %% 100 == 0) print(i)
-  g <- genes_to_alter[i]
-  promoter <- sample(unique(tss_pos[[g]]), 1)
-  idx <- mcols(tbg[[g]])$tx_name[tss_pos[[g]] == promoter]
-  neg_idx <- mcols(tbg[[g]])$tx_name[tss_pos[[g]] != promoter]
+  g2a <- genes_to_alter[i]
+  promoter <- sample(unique(tss_pos[[g2a]]), 1)
+  idx <- mcols(tbg[[g2a]])$tx_name[tss_pos[[g2a]] == promoter]
+  neg_idx <- mcols(tbg[[g2a]])$tx_name[tss_pos[[g2a]] != promoter]
   abundance[idx] <- abundance[idx] + 1/length(idx)
   abundance[neg_idx] <- abundance[neg_idx] - 1/length(neg_idx)
 }
@@ -237,9 +260,6 @@ names(cdna_both) <- paste0(names(cdna_both), "_",
                            rep(c("M","P"),each=length(suffix)),
                            "|", suffix)
 
-# get the mutated basepair per gene
-at_per_gene <- as(split(at, names(which_exons)), "IntegerList")
-
 # save abundance on unlisted 'tbg'
 txps <- unlist(tbg)
 names(txps) <- mcols(txps)$tx_name
@@ -250,4 +270,4 @@ mcols(txps)$snp_loc <- at_per_gene[ mcols(txps)$gene_id ]
 
 # FASTA and GRanges (with abundance)
 writeXStringSet(cdna_both, file=fastafile)
-save(ebt, tbg, txps, file=grangesfile)
+save(g, ebg, ebt, tbg, txps, file=grangesfile)

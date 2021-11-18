@@ -8,7 +8,8 @@ rule all:
     input: 
         summarized_experiment = "txp_allelic_se.rda",
         alignments = expand("align/{sample}.bam", sample=config["samples"]),
-        wasp = expand("wasp/alt_as_counts.{sample}.h5", sample=config["samples"])
+        wasp = expand("wasp/alt_as_counts.{sample}.h5", sample=config["samples"]),
+        gp = "data/drosophila_genoprob.h5"
 
 rule make_expression:
     output:
@@ -18,10 +19,12 @@ rule make_expression:
         chr = "data/drosophila_chr_2L.fasta",
         alt = "data/drosophila_alt_zero-based.tsv",
         vcf = "data/drosophila_chr_2L.vcf",
-        haps = "data/drosophila_alt.haps"
+        haps = "data/drosophila_alt.haps",
+        tt = "data/drosophila_test_target.txt"
     shell:
         "R CMD BATCH --no-save --no-restore '--args {output.txps_fa} {output.granges} "
-        "{output.ref} {output.chr} {output.alt} {output.vcf} {output.haps}' make_expression.R"
+        "{output.ref} {output.chr} {output.alt} {output.vcf} {output.haps} {output.tt}' "
+        "make_expression.R"
 
 rule make_reads:
     input:
@@ -132,12 +135,14 @@ rule filter_and_tally_alignments:
 rule wasp_snp2h5:
     input: "data/drosophila_chr_2L.vcf"
     output:
+        genoprob = "data/drosophila_genoprob.h5",
         index = "data/drosophila_snp_index.h5",
         tab = "data/drosophila_snp_tab.h5",
         hap = "data/drosophila_haps.h5"
     shell:
-        "snp2h5 --chrom data/drosophila_chromInfo.txt "
-        "--format vcf --snp_index {output.index} --snp_tab {output.tab} --haplotype {output.hap} "
+        "snp2h5 --chrom data/drosophila_chromInfo.txt --format vcf "
+        "--geno_prob {output.genoprob} --snp_index {output.index} "
+        "--snp_tab {output.tab} --haplotype {output.hap} "
         "data/drosophila_*.vcf "
 
 rule wasp_fasta_h5:
