@@ -6,8 +6,13 @@ CHT = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/CHT"
 
 rule all:
     input: 
+        reads = expand("reads/sample_{pair}_{sample}_{read}.fasta", 
+                       pair=config["pairs"], sample=config["samples"], 
+                       read=config["reads"]),
         summarized_experiment = "txp_allelic_se.rda",
-        wasp = "wasp/cht_results.txt"
+        align = expand("align/sample_{pair}_{sample}.filt.bam",
+                       pair=config["pairs"], sample=config["samples"])
+#        wasp = "wasp/cht_results.txt"
 
 rule make_expression:
     output:
@@ -29,23 +34,32 @@ rule make_reads:
         txps_fa = "transcripts.fa",
 	granges = "granges.rda"
     params:
-        n = len(config["samples"]),
-	libsize = "50e6"
+        libsize = "50e6",
+        pair = "{pair}"
     output:
-        expand("reads/{sample}_{read}.fasta", sample=config["samples"], read=config["reads"])
+        r11 = "reads/sample_{pair}_1_1.fasta",
+        r12 = "reads/sample_{pair}_1_2.fasta",
+        r21 = "reads/sample_{pair}_2_1.fasta",
+        r22 = "reads/sample_{pair}_2_2.fasta"
     shell:
-        "R CMD BATCH --no-save --no-restore '--args {input.txps_fa} {input.granges} "
-	"{params.n} {params.libsize}' make_reads.R"
+        """
+        R CMD BATCH --no-save --no-restore '--args {input.txps_fa} {input.granges} \
+        {params.libsize} {params.pair}' make_reads.R
+        mv reads/{params.pair}/sample_01_1.fasta {output.r11}
+        mv reads/{params.pair}/sample_01_2.fasta {output.r12}
+        mv reads/{params.pair}/sample_02_1.fasta {output.r21}
+        mv reads/{params.pair}/sample_02_2.fasta {output.r22}
+        """
 
-rule shuffle:
-    input:
-        r1 = "reads/{sample}_1.fasta",
-	r2 = "reads/{sample}_2.fasta"
-    output:
-        r1 = "reads/{sample}_1.shuffled.fa",
-	r2 = "reads/{sample}_2.shuffled.fa"
-    shell:
-        "./shuffle.sh -l {input.r1} -r {input.r2}"
+# rule shuffle:
+#     input:
+#         r1 = "reads/{sample}_1.fasta",
+# 	r2 = "reads/{sample}_2.fasta"
+#     output:
+#         r1 = "reads/{sample}_1.shuffled.fa",
+# 	r2 = "reads/{sample}_2.shuffled.fa"
+#     shell:
+#         "./shuffle.sh -l {input.r1} -r {input.r2}"
 
 rule salmon_index:
     input: "transcripts.fa"
@@ -56,8 +70,8 @@ rule salmon_index:
 
 rule salmon_quant:
     input:
-        r1 = "reads/{sample}_1.shuffled.fa",
-        r2 = "reads/{sample}_2.shuffled.fa",
+        r1 = "reads/{sample}_1.fasta",
+        r2 = "reads/{sample}_2.fasta",
         index = "anno/salmon-index-1.5.2"
     output:
         "quants/{sample}/quant.sf"
@@ -71,9 +85,9 @@ rule salmon_quant:
         "-o {params.dir} -1 {input.r1} -2 {input.r2}"
 
 rule import_quants:
-    input: expand("quants/{sample}/quant.sf", sample=config["samples"])
+    input: expand("quants/sample_{pair}_{sample}/quant.sf", pair=config["pairs"], sample=config["samples"])
     params:
-        nsamp = len(config["samples"])
+        nsamp = len(config["pairs"]) * len(config["samples"])
     output: "txp_allelic_se.rda"
     shell:
         "R CMD BATCH --no-save --no-restore '--args {params.nsamp}' import_quants.R"
@@ -100,8 +114,8 @@ rule hisat_index:
 rule hisat_align:
     input:
         index = "anno/bdgp6_sim/genome.1.ht2",
-        r1 = "reads/{sample}_1.shuffled.fa",
-        r2 = "reads/{sample}_2.shuffled.fa"
+        r1 = "reads/{sample}_1.fasta",
+        r2 = "reads/{sample}_2.fasta"
     output: "align/{sample}.bam"
     params:
         threads = "12",
