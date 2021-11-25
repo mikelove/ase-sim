@@ -11,8 +11,8 @@ rule all:
                        read=config["reads"]),
         summarized_experiment = "txp_allelic_se.rda",
         align = expand("align/sample_{pair}_{sample}.filt.bam",
-                       pair=config["pairs"], sample=config["samples"])
-#        wasp = "wasp/cht_results.txt"
+                       pair=config["pairs"], sample=config["samples"]),
+        wasp = "wasp/cht_results.txt"
 
 rule make_expression:
     output:
@@ -85,7 +85,9 @@ rule salmon_quant:
         "-o {params.dir} -1 {input.r1} -2 {input.r2}"
 
 rule import_quants:
-    input: expand("quants/sample_{pair}_{sample}/quant.sf", pair=config["pairs"], sample=config["samples"])
+    input: 
+        expand("quants/sample_{pair}_{sample}/quant.sf", 
+               pair=config["pairs"], sample=config["samples"])
     params:
         nsamp = len(config["pairs"]) * len(config["samples"])
     output: "txp_allelic_se.rda"
@@ -180,7 +182,7 @@ rule wasp_read_count:
          --snp_index {input.index} --snp_tab {input.tab} \
          --ref_as_counts {output.ref} --alt_as_counts {output.alt} \
          --other_as_counts {output.other} --read_counts {output.count} \
-         {input.bam} 2> /dev/null
+         {input.bam} 2>&1 | grep -v "partially"
          """
 
 rule wasp_extract:
@@ -209,9 +211,11 @@ rule wasp_extract:
 rule wasp_adjust_read_count:
     input:
         seq = "data/drosophila_seq.h5",
-        hap_counts = expand("wasp/hap_read_counts.{sample}.txt", sample=config["samples"])
+        hap_counts = expand("wasp/hap_read_counts.sample_{pair}_{sample}.txt", 
+                            pair=config["pairs"], sample=config["samples"])
     output:
-        expand("wasp/hap_read_counts.{sample}.adj", sample=config["samples"])
+        expand("wasp/hap_read_counts.sample_{pair}_{sample}.adj", 
+               pair=config["pairs"], sample=config["samples"])
     shell:
         """
         ls -1 {input.hap_counts} > wasp/preadj
@@ -230,7 +234,9 @@ rule wasp_adjust_het_prob:
         "{input.adj} {output}"
 
 rule CHT:
-    input: expand("wasp/hap_read_counts.{sample}.hetp", sample=config["samples"])
+    input: 
+        expand("wasp/hap_read_counts.sample_{pair}_{sample}.hetp", 
+               pair=config["pairs"], sample=config["samples"])
     output: "wasp/cht_results.txt"
     shell:
         """
