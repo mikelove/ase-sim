@@ -2,7 +2,7 @@ configfile: "config.json"
 
 SALMON = "/proj/milovelab/bin/salmon-1.5.2_linux_x86_64/bin/salmon"
 
-CHT = "python3.5 /nas/longleaf/apps/wasp_cht/2019-12/WASP_CHT/CHT"
+CHT = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/CHT"
 
 MAPPING = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/mapping"
 
@@ -12,9 +12,7 @@ rule all:
                        pair=config["pairs"], sample=config["samples"], 
                        read=config["reads"]),
         summarized_experiment = "txp_allelic_se.rda",
-        wasp = expand("wasp_cht/ref_as_counts.sample_{pair}_{sample}.h5",
-                      pair=config["pairs"], sample=config["samples"])
-#        wasp = "wasp_cht/cht_results.txt"
+        wasp = "wasp_cht/cht_results.txt"
 
 rule make_expression:
     output:
@@ -191,12 +189,15 @@ rule wasp_merge:
         keep2 = "wasp_mapping/{sample}.keep2.bam"
     output: "wasp_mapping/{sample}.merge.bam"
     params:
+        presort = "wasp_mapping/{sample}.presort.bam",
         threads = "12",
         mem_per_thread = "1G"
     shell:
         """
-        samtools merge -@ {params.threads} -o {output} {input.keep} {input.keep2}
+        samtools merge -@ {params.threads} -o {params.presort} {input.keep} {input.keep2}
+        samtools sort -@ {params.threads} -m {params.mem_per_thread} -o {output} {params.presort}
         samtools index {output}
+        rm -f {params.presort}
         """
 
 rule wasp_fasta_h5:
