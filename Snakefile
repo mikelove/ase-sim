@@ -2,7 +2,9 @@ configfile: "config.json"
 
 SALMON = "/proj/milovelab/bin/salmon-1.5.2_linux_x86_64/bin/salmon"
 
-CHT = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/CHT"
+CHT = "python3.5 /nas/longleaf/apps/wasp_cht/2019-12/WASP_CHT/CHT"
+
+MAPPING = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/mapping"
 
 rule all:
     input: 
@@ -10,9 +12,9 @@ rule all:
                        pair=config["pairs"], sample=config["samples"], 
                        read=config["reads"]),
         summarized_experiment = "txp_allelic_se.rda",
-        align = expand("align/sample_{pair}_{sample}.filt.bam",
-                       pair=config["pairs"], sample=config["samples"]),
-        wasp = "wasp/cht_results.txt"
+        wasp_map = expand("wasp_mapping/sample_{pair}_{sample}.map2.bam",
+                           pair=config["pairs"], sample=config["samples"]),
+        wasp = "wasp_cht/cht_results.txt"
 
 rule make_expression:
     output:
@@ -118,7 +120,7 @@ rule hisat_align:
         index = "anno/bdgp6_sim/genome.1.ht2",
         r1 = "reads/{sample}_1.fasta",
         r2 = "reads/{sample}_2.fasta"
-    output: "align/{sample}.bam"
+    output: "ht2_align/{sample}.bam"
     params:
         threads = "12",
         mem_per_thread = "1G"
@@ -130,11 +132,11 @@ rule hisat_align:
         samtools index {output}
         """
 
-rule filter_and_tally_alignments:
-    input: "align/{sample}.bam"
+rule filter_and_tally_hisat_alignments:
+    input: "ht2_align/{sample}.bam"
     output: 
-        lowqual = "align/{sample}.lowqual",
-        filter = "align/{sample}.filt.bam"
+        lowqual = "ht2_align/{sample}.lowqual",
+        filter = "ht2_align/{sample}.filt.bam"
     params:
         threads = "12",
         mem_per_thread = "1G"
@@ -144,6 +146,23 @@ rule filter_and_tally_alignments:
           sed 's/[_|]//g' | sort | uniq -c > {output.lowqual}
         samtools view -q 60 -@ {params.threads} -m {params.mem_per_thread} -b {input} > {output.filter}
         samtools index {output.filter}
+        """
+
+rule bowtie_align:
+    input:
+        r1 = "reads/{sample}_1.fasta",
+        r2 = "reads/{sample}_2.fasta"
+    output: "bt2_align/{sample}.bam"
+    params:
+        index = "anno/bowtie2_BDGP6/BDGP6",
+        threads = "12",
+        mem_per_thread = "1G"
+    shell:
+        """
+        bowtie2 -p {params.threads} -x {params.index} \
+           -f -1 {input.r1} -2 {input.r2} | samtools sort -@ {params.threads} \
+           -m {params.mem_per_thread} -o {output}
+        samtools index {output}
         """
 
 rule wasp_snp2h5:
@@ -159,6 +178,73 @@ rule wasp_snp2h5:
         "--snp_tab {output.tab} --haplotype {output.hap} "
         "data/drosophila_*.vcf "
 
+rule find_intersecting_snps:
+    input: 
+        bam = "bt2_align/{sample}.bam",
+        index = "data/drosophila_snp_index.h5",
+        tab = "data/drosophila_snp_tab.h5",
+        hap = "data/drosophila_haps.h5"
+    output: 
+        keep = "wasp_mapping/{sample}.keep.bam",
+        remap_bam = "wasp_mapping/{sample}.to.remap.bam",
+        remap_fq1 = "wasp_mapping/{sample}.remap.fq1.gz",
+        remap_fq2 = "wasp_mapping/{sample}.remap.fq2.gz"
+    shell:
+        """
+        {MAPPING}/find_intersecting_snps.py \
+          --is_paired_end \
+          --is_sorted \
+          --output_dir wasp_mapping \
+          --snp_tab {input.tab} \
+          --snp_index {input.index} \
+          --haplotype {input.hap} \
+          --samples data/samples \
+          {input.bam}
+        """
+
+rule bowtie_align_flip:
+    input:
+        remap_fq1 = "wasp_mapping/{sample}.remap.fq1.gz",
+        remap_fq2 = "wasp_mapping/{sample}.remap.fq2.gz"
+    output: "wasp_mapping/{sample}.map2.bam"
+    params:
+        index = "anno/bowtie2_BDGP6/BDGP6",
+        threads = "12",
+        mem_per_thread = "1G"
+    shell:
+        """
+        bowtie2 -p {params.threads} -x {params.index} \
+           -1 {input.remap_fq1} -2 {input.remap_fq2} \
+           | samtools view -q 10 - \
+           | samtools sort -@ {params.threads} \
+           -m {params.mem_per_thread} -o {output}
+        samtools index {output}
+        """
+
+# rule filter_remapped:
+#     input:
+#     output:
+#     shell:
+#         """
+#      python mapping/filter_remapped_reads.py \
+#        find_intersection_snps/${SAMPLE_NAME}.to.remap.bam \
+#        map2/${SAMPLE_NAME}.sort.bam \
+#        filter_remapped_reads/${SAMPLE_NAME}.keep.bam
+#         """
+
+# rule wasp_merge:
+#     input:
+#     output: "wasp_mapping/{sample}.merge.bam"
+#     shell:
+#         """
+#      samtools merge merge/${SAMPLE_NAME}.keep.merge.bam \
+#               filter_remapped_reads/${SAMPLE_NAME}.keep.bam  \
+#               find_intersecting_snps/${SAMPLE_NAME}.keep.bam
+#      samtools sort -o  merge/${SAMPLE_NAME}.keep.merge.sort.bam \
+#               merge/${SAMPLE_NAME}.keep.merge.bam 
+#      samtools index ${SAMPLE_NAME}.keep.merged.sort.bam
+#         """
+
 rule wasp_fasta_h5:
     input: "data/drosophila_chr_2L.fasta"
     output: "data/drosophila_seq.h5"
@@ -170,12 +256,12 @@ rule wasp_read_count:
     input:
         index = "data/drosophila_snp_index.h5",
         tab = "data/drosophila_snp_tab.h5",
-        bam = "align/{sample}.filt.bam"
+        bam = "ht2_align/{sample}.filt.bam"
     output:
-        ref = "wasp/ref_as_counts.{sample}.h5",
-        alt = "wasp/alt_as_counts.{sample}.h5",
-        other = "wasp/other_as_counts.{sample}.h5",
-        count = "wasp/read_counts.{sample}.h5"
+        ref = "wasp_cht/ref_as_counts.{sample}.h5",
+        alt = "wasp_cht/alt_as_counts.{sample}.h5",
+        other = "wasp_cht/other_as_counts.{sample}.h5",
+        count = "wasp_cht/read_counts.{sample}.h5"
     shell:
         """
         {CHT}/bam2h5.py --chrom data/drosophila_chromInfo.txt \
@@ -191,12 +277,12 @@ rule wasp_extract:
         hap = "data/drosophila_haps.h5",
         index = "data/drosophila_snp_index.h5",
         tab = "data/drosophila_snp_tab.h5",
-        ref = "wasp/ref_as_counts.{sample}.h5",
-        alt = "wasp/alt_as_counts.{sample}.h5",
-        other = "wasp/other_as_counts.{sample}.h5",
-        count = "wasp/read_counts.{sample}.h5",
+        ref = "wasp_cht/ref_as_counts.{sample}.h5",
+        alt = "wasp_cht/alt_as_counts.{sample}.h5",
+        other = "wasp_cht/other_as_counts.{sample}.h5",
+        count = "wasp_cht/read_counts.{sample}.h5",
         tt = "data/drosophila_test_target.txt"
-    output: "wasp/hap_read_counts.{sample}.txt"
+    output: "wasp_cht/hap_read_counts.{sample}.txt"
     shell:
         """
         {CHT}/extract_haplotype_read_counts.py  --chrom data/drosophila_chromInfo.txt \
@@ -211,40 +297,40 @@ rule wasp_extract:
 rule wasp_adjust_read_count:
     input:
         seq = "data/drosophila_seq.h5",
-        hap_counts = expand("wasp/hap_read_counts.sample_{pair}_{sample}.txt", 
+        hap_counts = expand("wasp_cht/hap_read_counts.sample_{pair}_{sample}.txt", 
                             pair=config["pairs"], sample=config["samples"])
     output:
-        expand("wasp/hap_read_counts.sample_{pair}_{sample}.adj", 
+        expand("wasp_cht/hap_read_counts.sample_{pair}_{sample}.adj", 
                pair=config["pairs"], sample=config["samples"])
     shell:
         """
-        ls -1 {input.hap_counts} > wasp/preadj
-        sed 's/.txt/.adj/' wasp/preadj > wasp/postadj
-        {CHT}/update_total_depth.py --seq {input.seq} wasp/preadj wasp/postadj
+        ls -1 {input.hap_counts} > wasp_cht/preadj
+        sed 's/.txt/.adj/' wasp_cht/preadj > wasp_cht/postadj
+        {CHT}/update_total_depth.py --seq {input.seq} wasp_cht/preadj wasp_cht/postadj
         """
 
 rule wasp_adjust_het_prob:
     input:
-        ref = "wasp/ref_as_counts.{sample}.h5",
-        alt = "wasp/alt_as_counts.{sample}.h5",
-        adj = "wasp/hap_read_counts.{sample}.adj"
-    output: "wasp/hap_read_counts.{sample}.hetp"
+        ref = "wasp_cht/ref_as_counts.{sample}.h5",
+        alt = "wasp_cht/alt_as_counts.{sample}.h5",
+        adj = "wasp_cht/hap_read_counts.{sample}.adj"
+    output: "wasp_cht/hap_read_counts.{sample}.hetp"
     shell:
         "{CHT}/update_het_probs.py --ref_as_counts {input.ref} --alt_as_counts {input.alt} "
         "{input.adj} {output}"
 
 rule CHT:
     input: 
-        expand("wasp/hap_read_counts.sample_{pair}_{sample}.hetp", 
+        expand("wasp_cht/hap_read_counts.sample_{pair}_{sample}.hetp", 
                pair=config["pairs"], sample=config["samples"])
-    output: "wasp/cht_results.txt"
+    output: "wasp_cht/cht_results.txt"
     shell:
         """
-        ls -1 {input} > wasp/cht_input_files.txt
-        {CHT}/fit_as_coefficients.py wasp/cht_input_files.txt wasp/cht_as_coef.txt
+        ls -1 {input} > wasp_cht/cht_input_files.txt
+        {CHT}/fit_as_coefficients.py wasp_cht/cht_input_files.txt wasp_cht/cht_as_coef.txt
         {CHT}/fit_bnb_coefficients.py --min_counts 50 --min_as_counts 10 \
-        wasp/cht_input_files.txt wasp/cht_bnb_coef.txt
+        wasp_cht/cht_input_files.txt wasp_cht/cht_bnb_coef.txt
         {CHT}/combined_test.py --min_as_counts 10 \
-        --bnb_disp wasp/cht_bnb_coef.txt --as_disp wasp/cht_as_coef.txt \
-        wasp/cht_input_files.txt {output}
+        --bnb_disp wasp_cht/cht_bnb_coef.txt --as_disp wasp_cht/cht_as_coef.txt \
+        wasp_cht/cht_input_files.txt {output}
         """
