@@ -12,7 +12,7 @@ rule all:
                        pair=config["pairs"], sample=config["samples"], 
                        read=config["reads"]),
         summarized_experiment = "txp_allelic_se.rda",
-        wasp = expand("wasp_cht/ref_as_counts.{pair}_{sample}.h5",
+        wasp = expand("wasp_cht/ref_as_counts.sample_{pair}_{sample}.h5",
                       pair=config["pairs"], sample=config["samples"])
 #        wasp = "wasp_cht/cht_results.txt"
 
