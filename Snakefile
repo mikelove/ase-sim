@@ -12,7 +12,7 @@ rule all:
                        pair=config["pairs"], sample=config["samples"], 
                        read=config["reads"]),
         summarized_experiment = "txp_allelic_se.rda",
-        wasp_map = expand("wasp_mapping/sample_{pair}_{sample}.map2.bam",
+        wasp_map = expand("wasp_mapping/sample_{pair}_{sample}.keep2.bam",
                            pair=config["pairs"], sample=config["samples"]),
         wasp = "wasp_cht/cht_results.txt"
 
@@ -160,8 +160,10 @@ rule bowtie_align:
     shell:
         """
         bowtie2 -p {params.threads} -x {params.index} \
-           -f -1 {input.r1} -2 {input.r2} | samtools sort -@ {params.threads} \
-           -m {params.mem_per_thread} -o {output}
+          -f -1 {input.r1} -2 {input.r2} \
+          | samtools view -b -q 10 - \
+          | samtools sort -@ {params.threads} \
+          -m {params.mem_per_thread} -o {output}
         samtools index {output}
         """
 
@@ -214,23 +216,20 @@ rule bowtie_align_flip:
     shell:
         """
         bowtie2 -p {params.threads} -x {params.index} \
-           -1 {input.remap_fq1} -2 {input.remap_fq2} \
-           | samtools view -q 10 - \
-           | samtools sort -@ {params.threads} \
-           -m {params.mem_per_thread} -o {output}
+          -1 {input.remap_fq1} -2 {input.remap_fq2} \
+          | samtools view -b -q 10 - \
+          | samtools sort -@ {params.threads} \
+          -m {params.mem_per_thread} -o {output}
         samtools index {output}
         """
 
-# rule filter_remapped:
-#     input:
-#     output:
-#     shell:
-#         """
-#      python mapping/filter_remapped_reads.py \
-#        find_intersection_snps/${SAMPLE_NAME}.to.remap.bam \
-#        map2/${SAMPLE_NAME}.sort.bam \
-#        filter_remapped_reads/${SAMPLE_NAME}.keep.bam
-#         """
+rule filter_remapped:
+    input:
+        remap_bam = "wasp_mapping/{sample}.to.remap.bam",
+        map2_bam = "wasp_mapping/{sample}.map2.bam"
+    output: "wasp_mapping/{sample}.keep2.bam"
+    shell:
+        "{MAPPING}/filter_remapped_reads.py {input.remap_bam} {input.map2_bam} {output}"
 
 # rule wasp_merge:
 #     input:
