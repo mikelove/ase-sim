@@ -12,9 +12,9 @@ rule all:
                        pair=config["pairs"], sample=config["samples"], 
                        read=config["reads"]),
         summarized_experiment = "txp_allelic_se.rda",
-        wasp_map = expand("wasp_mapping/sample_{pair}_{sample}.keep2.bam",
-                           pair=config["pairs"], sample=config["samples"]),
-        wasp = "wasp_cht/cht_results.txt"
+        wasp = expand("wasp_cht/ref_as_counts.{pair}_{sample}.h5",
+                      pair=config["pairs"], sample=config["samples"])
+#        wasp = "wasp_cht/cht_results.txt"
 
 rule make_expression:
     output:
@@ -53,16 +53,6 @@ rule make_reads:
         mv reads/{params.pair}/sample_02_2.fasta {output.r22}
         """
 
-# rule shuffle:
-#     input:
-#         r1 = "reads/{sample}_1.fasta",
-# 	r2 = "reads/{sample}_2.fasta"
-#     output:
-#         r1 = "reads/{sample}_1.shuffled.fa",
-# 	r2 = "reads/{sample}_2.shuffled.fa"
-#     shell:
-#         "./shuffle.sh -l {input.r1} -r {input.r2}"
-
 rule salmon_index:
     input: "transcripts.fa"
     output: directory("anno/salmon-index-1.5.2")
@@ -95,42 +85,6 @@ rule import_quants:
     output: "txp_allelic_se.rda"
     shell:
         "R CMD BATCH --no-save --no-restore '--args {params.nsamp}' import_quants.R"
-
-rule hisat_ss:
-    input: "data/Drosophila_melanogaster.BDGP6.28.100.ss.gz"
-    output: "data/Drosophila_melanogaster.BDGP6.28.100.ss"
-    shell:
-        "gunzip -c {input} > {output}"
-
-rule hisat_index:
-    input: 
-        ref = "data/drosophila_ref.fasta",
-        alt = "data/drosophila_alt_zero-based.tsv",
-        haps = "data/drosophila_alt.haps",
-        ss = "data/Drosophila_melanogaster.BDGP6.28.100.ss"
-    output: "anno/bdgp6_sim/genome.1.ht2"
-    params:
-        threads = "12"
-    shell:
-        "hisat2-build-s -p {params.threads} -f --snp {input.alt} --haplotype {input.haps} "
-        "--ss {input.ss} {input.ref} anno/bdgp6_sim/genome"
-
-rule hisat_align:
-    input:
-        index = "anno/bdgp6_sim/genome.1.ht2",
-        r1 = "reads/{sample}_1.fasta",
-        r2 = "reads/{sample}_2.fasta"
-    output: "ht2_align/{sample}.bam"
-    params:
-        threads = "12",
-        mem_per_thread = "1G"
-    shell:
-        """
-        hisat2 -p {params.threads} -f -x anno/bdgp6_sim/genome \
-          -1 {input.r1} -2 {input.r2} | samtools sort -@ {params.threads} \
-          -m {params.mem_per_thread} -o {output}
-        samtools index {output}
-        """
 
 rule filter_and_tally_hisat_alignments:
     input: "ht2_align/{sample}.bam"
@@ -231,18 +185,19 @@ rule filter_remapped:
     shell:
         "{MAPPING}/filter_remapped_reads.py {input.remap_bam} {input.map2_bam} {output}"
 
-# rule wasp_merge:
-#     input:
-#     output: "wasp_mapping/{sample}.merge.bam"
-#     shell:
-#         """
-#      samtools merge merge/${SAMPLE_NAME}.keep.merge.bam \
-#               filter_remapped_reads/${SAMPLE_NAME}.keep.bam  \
-#               find_intersecting_snps/${SAMPLE_NAME}.keep.bam
-#      samtools sort -o  merge/${SAMPLE_NAME}.keep.merge.sort.bam \
-#               merge/${SAMPLE_NAME}.keep.merge.bam 
-#      samtools index ${SAMPLE_NAME}.keep.merged.sort.bam
-#         """
+rule wasp_merge:
+    input:
+        keep = "wasp_mapping/{sample}.keep.bam",        
+        keep2 = "wasp_mapping/{sample}.keep2.bam"
+    output: "wasp_mapping/{sample}.merge.bam"
+    params:
+        threads = "12",
+        mem_per_thread = "1G"
+    shell:
+        """
+        samtools merge -@ {params.threads} -o {output} {input.keep} {input.keep2}
+        samtools index {output}
+        """
 
 rule wasp_fasta_h5:
     input: "data/drosophila_chr_2L.fasta"
@@ -255,7 +210,7 @@ rule wasp_read_count:
     input:
         index = "data/drosophila_snp_index.h5",
         tab = "data/drosophila_snp_tab.h5",
-        bam = "ht2_align/{sample}.filt.bam"
+        bam = "wasp_mapping/{sample}.merge.bam"
     output:
         ref = "wasp_cht/ref_as_counts.{sample}.h5",
         alt = "wasp_cht/alt_as_counts.{sample}.h5",
@@ -264,11 +219,11 @@ rule wasp_read_count:
     shell:
         """
         {CHT}/bam2h5.py --chrom data/drosophila_chromInfo.txt \
-         --snp_index {input.index} --snp_tab {input.tab} \
-         --ref_as_counts {output.ref} --alt_as_counts {output.alt} \
-         --other_as_counts {output.other} --read_counts {output.count} \
-         {input.bam} 2>&1 | grep -v "partially"
-         """
+          --snp_index {input.index} --snp_tab {input.tab} \
+          --ref_as_counts {output.ref} --alt_as_counts {output.alt} \
+          --other_as_counts {output.other} --read_counts {output.count} \
+          {input.bam}
+        """
 
 rule wasp_extract:
     input:
@@ -333,3 +288,49 @@ rule CHT:
         --bnb_disp wasp_cht/cht_bnb_coef.txt --as_disp wasp_cht/cht_as_coef.txt \
         wasp_cht/cht_input_files.txt {output}
         """
+
+# rule shuffle:
+#     input:
+#         r1 = "reads/{sample}_1.fasta",
+# 	r2 = "reads/{sample}_2.fasta"
+#     output:
+#         r1 = "reads/{sample}_1.shuffled.fa",
+# 	r2 = "reads/{sample}_2.shuffled.fa"
+#     shell:
+#         "./shuffle.sh -l {input.r1} -r {input.r2}"
+
+# rule hisat_ss:
+#     input: "data/Drosophila_melanogaster.BDGP6.28.100.ss.gz"
+#     output: "data/Drosophila_melanogaster.BDGP6.28.100.ss"
+#     shell:
+#         "gunzip -c {input} > {output}"
+
+# rule hisat_index:
+#     input: 
+#         ref = "data/drosophila_ref.fasta",
+#         alt = "data/drosophila_alt_zero-based.tsv",
+#         haps = "data/drosophila_alt.haps",
+#         ss = "data/Drosophila_melanogaster.BDGP6.28.100.ss"
+#     output: "anno/bdgp6_sim/genome.1.ht2"
+#     params:
+#         threads = "12"
+#     shell:
+#         "hisat2-build-s -p {params.threads} -f --snp {input.alt} --haplotype {input.haps} "
+#         "--ss {input.ss} {input.ref} anno/bdgp6_sim/genome"
+
+# rule hisat_align:
+#     input:
+#         index = "anno/bdgp6_sim/genome.1.ht2",
+#         r1 = "reads/{sample}_1.fasta",
+#         r2 = "reads/{sample}_2.fasta"
+#     output: "ht2_align/{sample}.bam"
+#     params:
+#         threads = "12",
+#         mem_per_thread = "1G"
+#     shell:
+#         """
+#         hisat2 -p {params.threads} -f -x anno/bdgp6_sim/genome \
+#           -1 {input.r1} -2 {input.r2} | samtools sort -@ {params.threads} \
+#           -m {params.mem_per_thread} -o {output}
+#         samtools index {output}
+#         """
