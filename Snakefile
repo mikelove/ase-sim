@@ -12,7 +12,9 @@ rule all:
                        pair=config["pairs"], sample=config["samples"], 
                        read=config["reads"]),
         summarized_experiment = "txp_allelic_se.rda",
-        wasp = "wasp_cht/cht_results.txt"
+        hisat = expand("ht2_align/sample_{pair}_{sample}.bam",
+                       pair=config["pairs"], sample=config["samples"])
+#        wasp = "wasp_cht/cht_results.txt"
 
 rule make_expression:
     output:
@@ -84,20 +86,46 @@ rule import_quants:
     shell:
         "R CMD BATCH --no-save --no-restore '--args {params.nsamp}' import_quants.R"
 
-rule filter_and_tally_hisat_alignments:
-    input: "ht2_align/{sample}.bam"
-    output: 
-        lowqual = "ht2_align/{sample}.lowqual",
-        filter = "ht2_align/{sample}.filt.bam"
+rule hisat_ss:
+    input: "data/Drosophila_melanogaster.BDGP6.28.100.ss.gz"
+    output: "data/Drosophila_melanogaster.BDGP6.28.100.ss"
+    shell:
+        "gunzip -c {input} > {output}"
+
+rule hisat_index:
+    input: 
+        ref = "data/drosophila_ref.fasta",
+        alt = "data/drosophila_alt_zero-based.tsv",
+        haps = "data/drosophila_alt.haps",
+        ss = "data/Drosophila_melanogaster.BDGP6.28.100.ss"
+    output: "anno/bdgp6_sim/genome.1.ht2"
+    params:
+        threads = "12"
+    shell:
+        "hisat2-build-s -p {params.threads} -f --snp {input.alt} --haplotype {input.haps} "
+        "--ss {input.ss} {input.ref} anno/bdgp6_sim/genome"
+
+rule hisat_align:
+    input:
+        index = "anno/bdgp6_sim/genome.1.ht2",
+        r1 = "reads/{sample}_1.fasta",
+        r2 = "reads/{sample}_2.fasta"
+    output: "ht2_align/{sample}.unfilt.sam"
+    params:
+        threads = "12"
+    shell:
+        "hisat2 -p {params.threads} -f -x anno/bdgp6_sim/genome -1 {input.r1} -2 {input.r2} > {output}"
+
+rule hisat_filt:
+    input: "ht2_align/{sample}.unfilt.sam"
+    output: "ht2_align/{sample}.bam"
     params:
         threads = "12",
-        mem_per_thread = "1G"
+        mem = "1G" # per thread
     shell:
         """
-        samtools view {input} | awk '$5 < 60 {{print $1}}' | grep -o '_.|' | \
-          sed 's/[_|]//g' | sort | uniq -c > {output.lowqual}
-        samtools view -q 60 -@ {params.threads} -m {params.mem_per_thread} -b {input} > {output.filter}
-        samtools index {output.filter}
+        samtools view -b -q 60 {input} | samtools sort -@ {params.threads} -m {params.mem} -o {output}
+        samtools index {output}
         """
 
 rule bowtie_align:
@@ -108,14 +136,14 @@ rule bowtie_align:
     params:
         index = "anno/bowtie2_BDGP6/BDGP6",
         threads = "12",
-        mem_per_thread = "1G"
+        mem = "1G"
     shell:
         """
         bowtie2 -p {params.threads} -x {params.index} \
           -f -1 {input.r1} -2 {input.r2} \
           | samtools view -b -q 10 - \
           | samtools sort -@ {params.threads} \
-          -m {params.mem_per_thread} -o {output}
+          -m {params.mem} -o {output}
         samtools index {output}
         """
 
@@ -164,14 +192,14 @@ rule bowtie_align_flip:
     params:
         index = "anno/bowtie2_BDGP6/BDGP6",
         threads = "12",
-        mem_per_thread = "1G"
+        mem = "1G"
     shell:
         """
         bowtie2 -p {params.threads} -x {params.index} \
           -1 {input.remap_fq1} -2 {input.remap_fq2} \
           | samtools view -b -q 10 - \
           | samtools sort -@ {params.threads} \
-          -m {params.mem_per_thread} -o {output}
+          -m {params.mem} -o {output}
         samtools index {output}
         """
 
@@ -191,11 +219,11 @@ rule wasp_merge:
     params:
         presort = "wasp_mapping/{sample}.presort.bam",
         threads = "12",
-        mem_per_thread = "1G"
+        mem = "1G"
     shell:
         """
         samtools merge -@ {params.threads} -o {params.presort} {input.keep} {input.keep2}
-        samtools sort -@ {params.threads} -m {params.mem_per_thread} -o {output} {params.presort}
+        samtools sort -@ {params.threads} -m {params.mem} -o {output} {params.presort}
         samtools index {output}
         rm -f {params.presort}
         """
@@ -299,39 +327,3 @@ rule CHT:
 # 	r2 = "reads/{sample}_2.shuffled.fa"
 #     shell:
 #         "./shuffle.sh -l {input.r1} -r {input.r2}"
-
-# rule hisat_ss:
-#     input: "data/Drosophila_melanogaster.BDGP6.28.100.ss.gz"
-#     output: "data/Drosophila_melanogaster.BDGP6.28.100.ss"
-#     shell:
-#         "gunzip -c {input} > {output}"
-
-# rule hisat_index:
-#     input: 
-#         ref = "data/drosophila_ref.fasta",
-#         alt = "data/drosophila_alt_zero-based.tsv",
-#         haps = "data/drosophila_alt.haps",
-#         ss = "data/Drosophila_melanogaster.BDGP6.28.100.ss"
-#     output: "anno/bdgp6_sim/genome.1.ht2"
-#     params:
-#         threads = "12"
-#     shell:
-#         "hisat2-build-s -p {params.threads} -f --snp {input.alt} --haplotype {input.haps} "
-#         "--ss {input.ss} {input.ref} anno/bdgp6_sim/genome"
-
-# rule hisat_align:
-#     input:
-#         index = "anno/bdgp6_sim/genome.1.ht2",
-#         r1 = "reads/{sample}_1.fasta",
-#         r2 = "reads/{sample}_2.fasta"
-#     output: "ht2_align/{sample}.bam"
-#     params:
-#         threads = "12",
-#         mem_per_thread = "1G"
-#     shell:
-#         """
-#         hisat2 -p {params.threads} -f -x anno/bdgp6_sim/genome \
-#           -1 {input.r1} -2 {input.r2} | samtools sort -@ {params.threads} \
-#           -m {params.mem_per_thread} -o {output}
-#         samtools index {output}
-#         """

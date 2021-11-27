@@ -1,10 +1,11 @@
 .snakemake
-align
 anno
+bt2_align
 data
 quants
 reads
-wasp
+wasp_cht
+wasp_mapping
 *.2bit
 *.rda
 *.Rout
