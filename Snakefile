@@ -13,8 +13,10 @@ rule all:
                        read=config["reads"]),
         summarized_experiment = "txp_allelic_se.rda",
         hisat = expand("ht2_align/sample_{pair}_{sample}.bam",
-                       pair=config["pairs"], sample=config["samples"])
-#        wasp = "wasp_cht/cht_results.txt"
+                       pair=config["pairs"], sample=config["samples"]),
+        wasp = expand("wasp_cht/ref_as_counts.sample_{pair}_{sample}.h5",
+                      pair=config["pairs"], sample=config["samples"]),
+        wasp_result = "wasp_cht/cht_results.txt"
 
 rule make_expression:
     output:
@@ -110,41 +112,18 @@ rule hisat_align:
         index = "anno/bdgp6_sim/genome.1.ht2",
         r1 = "reads/{sample}_1.fasta",
         r2 = "reads/{sample}_2.fasta"
-    output: "ht2_align/{sample}.unfilt.sam"
-    params:
-        threads = "12"
-    shell:
-        "hisat2 -p {params.threads} -f -x anno/bdgp6_sim/genome -1 {input.r1} -2 {input.r2} > {output}"
-
-rule hisat_filt:
-    input: "ht2_align/{sample}.unfilt.sam"
     output: "ht2_align/{sample}.bam"
     params:
+        xdir = "anno/bdgp6_sim/genome",
+        temp_sam = "ht2_align/{sample}.unfilt.sam",
         threads = "12",
         mem = "1G" # per thread
     shell:
         """
-        samtools view -b -q 60 {input} | samtools sort -@ {params.threads} -m {params.mem} -o {output}
+        hisat2 -p {params.threads} -f -x {params.xdir} -1 {input.r1} -2 {input.r2} > {params.temp_sam}
+        samtools view -b -q 60 {params.temp_sam} | samtools sort -@ {params.threads} -m {params.mem} -o {output}
         samtools index {output}
-        """
-
-rule bowtie_align:
-    input:
-        r1 = "reads/{sample}_1.fasta",
-        r2 = "reads/{sample}_2.fasta"
-    output: "bt2_align/{sample}.bam"
-    params:
-        index = "anno/bowtie2_BDGP6/BDGP6",
-        threads = "12",
-        mem = "1G"
-    shell:
-        """
-        bowtie2 -p {params.threads} -x {params.index} \
-          -f -1 {input.r1} -2 {input.r2} \
-          | samtools view -b -q 10 - \
-          | samtools sort -@ {params.threads} \
-          -m {params.mem} -o {output}
-        samtools index {output}
+        rm -f {params.temp_sam}
         """
 
 rule wasp_snp2h5:
@@ -162,7 +141,7 @@ rule wasp_snp2h5:
 
 rule find_intersecting_snps:
     input: 
-        bam = "bt2_align/{sample}.bam",
+        bam = "ht2_align/{sample}.bam",
         index = "data/drosophila_snp_index.h5",
         tab = "data/drosophila_snp_tab.h5",
         hap = "data/drosophila_haps.h5"
@@ -184,23 +163,23 @@ rule find_intersecting_snps:
           {input.bam}
         """
 
-rule bowtie_align_flip:
+rule hisat_align_flip:
     input:
         remap_fq1 = "wasp_mapping/{sample}.remap.fq1.gz",
         remap_fq2 = "wasp_mapping/{sample}.remap.fq2.gz"
     output: "wasp_mapping/{sample}.map2.bam"
     params:
-        index = "anno/bowtie2_BDGP6/BDGP6",
+        xdir = "anno/bdgp6_sim/genome",
+        temp_sam = "wasp_mapping/{sample}.unfilt.sam",
         threads = "12",
         mem = "1G"
     shell:
         """
-        bowtie2 -p {params.threads} -x {params.index} \
-          -1 {input.remap_fq1} -2 {input.remap_fq2} \
-          | samtools view -b -q 10 - \
-          | samtools sort -@ {params.threads} \
-          -m {params.mem} -o {output}
+        hisat2 -p {params.threads} -x {params.xdir} \
+        -1 {input.remap_fq1} -2 {input.remap_fq2} > {params.temp_sam}
+        samtools view -b -q 60 {params.temp_sam} | samtools sort -@ {params.threads} -m {params.mem} -o {output}
         samtools index {output}
+        rm -f {params.temp_sam}
         """
 
 rule filter_remapped:
@@ -251,7 +230,7 @@ rule wasp_read_count:
           --snp_index {input.index} --snp_tab {input.tab} \
           --ref_as_counts {output.ref} --alt_as_counts {output.alt} \
           --other_as_counts {output.other} --read_counts {output.count} \
-          {input.bam}
+          {input.bam} 2>&1 grep -v "partially"
         """
 
 rule wasp_extract:
