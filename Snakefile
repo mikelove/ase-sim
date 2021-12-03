@@ -47,8 +47,8 @@ rule make_reads:
         r22 = "reads/sample_{pair}_2_2.fasta"
     shell:
         """
-        R CMD BATCH --no-save --no-restore '--args {input.txps_fa} {input.granges} \
-        {params.libsize} {params.pair}' make_reads.R
+        R CMD BATCH --no-save --no-restore \
+          '--args {input.txps_fa} {input.granges} {params.libsize} {params.pair}' make_reads.R
         mv reads/{params.pair}/sample_01_1.fasta {output.r11}
         mv reads/{params.pair}/sample_01_2.fasta {output.r12}
         mv reads/{params.pair}/sample_02_1.fasta {output.r21}
@@ -230,7 +230,7 @@ rule wasp_read_count:
           --snp_index {input.index} --snp_tab {input.tab} \
           --ref_as_counts {output.ref} --alt_as_counts {output.alt} \
           --other_as_counts {output.other} --read_counts {output.count} \
-          {input.bam} 2>&1 grep -v "partially"
+          {input.bam} 2>&1 | grep -v "partially"
         """
 
 rule wasp_extract:

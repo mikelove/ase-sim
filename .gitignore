@@ -1,7 +1,8 @@
 .snakemake
 anno
-bt2_align
 data
+ht2_align
+log
 quants
 reads
 wasp_cht
