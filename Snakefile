@@ -82,7 +82,7 @@ rule salmon_quant:
 	nboot = "30"
     shell:
         "{SALMON} quant -i {input.index} -l IU -p {params.threads} "
-	"--numBootstraps {params.nboot} "
+	"--numBootstraps {params.nboot} --dumpEq "
         "-o {params.dir} -1 {input.r1} -2 {input.r2}"
 
 rule import_quants:
