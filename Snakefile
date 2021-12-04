@@ -200,6 +200,8 @@ rule bam_the_fake_bams:
         """
         samtools view -b {input.keep} > {output.keep}
         samtools view -b {input.to_remap} > {output.to_remap}
+        rm -f {input.keep}
+        rm -f {input.to_remap}
         """
 
 rule filter_remapped:
