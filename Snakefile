@@ -55,6 +55,13 @@ rule make_reads:
         mv reads/{params.pair}/sample_02_2.fasta {output.r22}
         """
 
+rule compress_reads:
+    input: "{sample}.fasta"
+    output: "{sample}.fasta.gz"
+    params:
+        threads = "12"
+    shell: "pigz -p {params.threads} {input}"
+
 rule salmon_index:
     input: "transcripts.fa"
     output: directory("anno/salmon-index-1.5.2")
@@ -64,8 +71,8 @@ rule salmon_index:
 
 rule salmon_quant:
     input:
-        r1 = "reads/{sample}_1.fasta",
-        r2 = "reads/{sample}_2.fasta",
+        r1 = "reads/{sample}_1.fasta.gz",
+        r2 = "reads/{sample}_2.fasta.gz",
         index = "anno/salmon-index-1.5.2"
     output:
         "quants/{sample}/quant.sf"
@@ -110,8 +117,8 @@ rule hisat_index:
 rule hisat_align:
     input:
         index = "anno/bdgp6_sim/genome.1.ht2",
-        r1 = "reads/{sample}_1.fasta",
-        r2 = "reads/{sample}_2.fasta"
+        r1 = "reads/{sample}_1.fasta.gz",
+        r2 = "reads/{sample}_2.fasta.gz"
     output: "ht2_align/{sample}.bam"
     params:
         xdir = "anno/bdgp6_sim/genome",
