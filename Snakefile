@@ -8,14 +8,14 @@ MAPPING = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/mapping"
 
 rule all:
     input: 
-        reads = expand("reads/sample_{pair}_{sample}_{read}.fasta", 
+        reads = expand("reads/sample_{pair}_{sample}_{read}.fasta.gz", 
                        pair=config["pairs"], sample=config["samples"], 
                        read=config["reads"]),
         summarized_experiment = "txp_allelic_se.rda",
         hisat = expand("ht2_align/sample_{pair}_{sample}.bam",
                        pair=config["pairs"], sample=config["samples"]),
-        wasp = expand("wasp_cht/ref_as_counts.sample_{pair}_{sample}.h5",
-                      pair=config["pairs"], sample=config["samples"]),
+        wasp_counts = expand("wasp_cht/ref_as_counts.sample_{pair}_{sample}.h5",
+                             pair=config["pairs"], sample=config["samples"]),
         wasp_result = "wasp_cht/cht_results.txt"
 
 rule make_expression:
@@ -189,9 +189,22 @@ rule hisat_align_flip:
         rm -f {params.temp_sam}
         """
 
+rule bam_the_fake_bams:
+    input:
+        keep = "wasp_mapping/{sample}.keep.bam",
+        to_remap = "wasp_mapping/{sample}.to.remap.bam",
+    output:
+        keep = "wasp_mapping/{sample}.keep.actual.bam",
+        to_remap = "wasp_mapping/{sample}.to.remap.actual.bam",
+    shell:
+        """
+        samtools view -b {input.keep} > {output.keep}
+        samtools view -b {input.to_remap} > {output.to_remap}
+        """
+
 rule filter_remapped:
     input:
-        remap_bam = "wasp_mapping/{sample}.to.remap.bam",
+        remap_bam = "wasp_mapping/{sample}.to.remap.actual.bam",
         map2_bam = "wasp_mapping/{sample}.map2.bam"
     output: "wasp_mapping/{sample}.keep2.bam"
     shell:
@@ -199,7 +212,7 @@ rule filter_remapped:
 
 rule wasp_merge:
     input:
-        keep = "wasp_mapping/{sample}.keep.bam",        
+        keep = "wasp_mapping/{sample}.keep.actual.bam",
         keep2 = "wasp_mapping/{sample}.keep2.bam"
     output: "wasp_mapping/{sample}.merge.bam"
     params:
