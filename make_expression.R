@@ -126,7 +126,7 @@ alt_allele <- lapply(names(dna), function(chr) {
   x <- spl_at[[chr]]
   as( complement(Views(dna[[chr]], x, x)), "character" )
 })
-names(ref_allele) <- names(alt_allele) <- nannmes(dna)
+names(ref_allele) <- names(alt_allele) <- names(dna)
 
 # write a 2bit file for the alt chromosomes
 rtracklayer::export(dna_alt, con="data/drosophila_alt.2bit")
@@ -167,7 +167,8 @@ write.table(alt_table0, file=altfile, quote=FALSE, sep="\t", col.names=FALSE)
 # VCF files, one per chrom, for WASP
 vcf_table <- data.frame(CHROM=alt_table$chr, POS=alt_table$pos, ID=rownames(alt_table),
                         REF=alt_table$ref, ALT=alt_table$alt,
-                        QUAL=".", FILTER="PASS", INFO=".", FORMAT="GT:GL", sample="0|1:-100,0,-100")
+                        QUAL=".", FILTER="PASS", INFO=".", FORMAT="GT:GL",
+                        sample="0|1:-100,0,-100")
 for (chr in names(dna)) {
   write.table(vcf_table[vcf_table$CHROM == chr,], file=sub("2L",chr,vcffile),
               quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
@@ -230,21 +231,33 @@ abundance <- rep(2, length(ebt))
 names(abundance) <- names(ebt)
 
 # alter expression of 1,000 genes
+# - half will be isoform level AI
+# - half will be gene level AI
+# set random seed for the sampling below
+set.seed(1)
 genes_to_alter <- sample(names(tbg)[txp_idx], 1000)
 for (i in seq_along(genes_to_alter)) {
   if (i %% 100 == 0) print(i)
   g2a <- genes_to_alter[i]
-  promoter <- sample(unique(tss_pos[[g2a]]), 1)
-  idx <- mcols(tbg[[g2a]])$tx_name[tss_pos[[g2a]] == promoter]
-  neg_idx <- mcols(tbg[[g2a]])$tx_name[tss_pos[[g2a]] != promoter]
-  abundance[idx] <- abundance[idx] + 1/length(idx)
-  abundance[neg_idx] <- abundance[neg_idx] - 1/length(neg_idx)
+  if (i <= 500) {
+    # isoform AI - balanced within gene
+    promoter <- sample(unique(tss_pos[[g2a]]), 1)
+    idx <- mcols(tbg[[g2a]])$tx_name[tss_pos[[g2a]] == promoter]
+    neg_idx <- mcols(tbg[[g2a]])$tx_name[tss_pos[[g2a]] != promoter]
+    abundance[idx] <- abundance[idx] + 1/length(idx)
+    abundance[neg_idx] <- abundance[neg_idx] - 1/length(neg_idx)
+  } else {
+    # gene AI
+    idx <- mcols(tbg[[g2a]])$tx_name
+    up_or_down <- c(2.5, 1.6)
+    abundance[idx] <- rep(sample(up_or_down, 1), length(idx))
+  }
 }
 
-# STEP 4 write out simulation files
+# paternal allele is close to maternal
+sum(abundance) / (2 * length(abundance))
 
-# combine the original and altered transcripts
-cdna_both <- c(cdna, cdna_alt)
+# STEP 4 write out simulation files
 
 # get gene id
 tbg_reorder <- unlist(tbg)
@@ -255,19 +268,38 @@ gene <- mcols(tbg_reorder)$gene_id
 # build a suffix for the transcript names
 suffix <- paste0(tss_pos_vector, "_", round(abundance,2), "_", gene)
 
-# transcript headers are: 'name_allele|suffix'
-names(cdna_both) <- paste0(names(cdna_both), "_",
-                           rep(c("M","P"),each=length(suffix)),
-                           "|", suffix)
-
 # save abundance on unlisted 'tbg'
 txps <- unlist(tbg)
 names(txps) <- mcols(txps)$tx_name
 mcols(txps)$abundance <- abundance
 mcols(txps)$tss <- tss_pos_vector
-mcols(txps)$width <- width(cdna)
 mcols(txps)$snp_loc <- at_per_gene[ mcols(txps)$gene_id ]
 
-# FASTA and GRanges (with abundance)
+# save the AI status at txp level
+mcols(txps)$isoAI <- FALSE
+mcols(txps)$isoAI[ mcols(txps)$gene_id %in% genes_to_alter[1:500] ] <- TRUE
+mcols(txps)$geneAI <- FALSE
+mcols(txps)$geneAI[ mcols(txps)$gene_id %in% genes_to_alter[501:1000] ] <- TRUE
+
+# save the AI status at gene level
+mcols(g)$isoAI <- FALSE
+mcols(g)[ genes_to_alter[1:500], "isoAI"] <- TRUE
+mcols(g)$geneAI <- FALSE
+mcols(g)[ genes_to_alter[501:1000], "geneAI"] <- TRUE
+
+# width of cDNA
+mcols(txps)$width <- width(cdna)
+
+# write out GRanges (with abundance)
+save(g, ebg, ebt, tbg, txps, genes_to_alter, file=grangesfile)
+
+# combine the original and altered transcripts
+cdna_both <- c(cdna, cdna_alt)
+
+# transcript headers are: 'name_allele|suffix'
+names(cdna_both) <- paste0(names(cdna_both), "_",
+                           rep(c("M","P"),each=length(suffix)),
+                           "|", suffix)
+
+# write out FASTA
 writeXStringSet(cdna_both, file=fastafile)
-save(g, ebg, ebt, tbg, txps, file=grangesfile)

@@ -27,9 +27,10 @@ fold_changes <- matrix(1, nrow=2 * length(txps), ncol=2)
 n_per_group <- 1
 
 simulate_experiment(fasta=fasta, outdir=file.path("reads",pair),
-                    num_reps=c(n_per_group, n_per_group),
-                    fraglen=400, fragsd=25, readlen=150,
+                    num_reps=c(n_per_group, n_per_group), # 1 per group
+                    fraglen=400, fragsd=25, # long fragments
+                    readlen=150, # 2x 150bp reads
                     reads_per_transcript=counts, # read counts
-                    size=1e4, # dispersion
-                    fold_changes=fold_changes,
+                    size=100, # 1/dispersion
+                    fold_changes=fold_changes, # no DE -> FC all are 1
                     paired=TRUE)

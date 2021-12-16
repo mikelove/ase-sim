@@ -8,15 +8,16 @@ MAPPING = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/mapping"
 
 rule all:
     input: 
-        reads = expand("reads/sample_{pair}_{sample}_{read}.fasta.gz", 
-                       pair=config["pairs"], sample=config["samples"], 
-                       read=config["reads"]),
-        summarized_experiment = "txp_allelic_se.rda",
-        hisat = expand("ht2_align/sample_{pair}_{sample}.bam",
-                       pair=config["pairs"], sample=config["samples"]),
-        wasp_counts = expand("wasp_cht/ref_as_counts.sample_{pair}_{sample}.h5",
-                             pair=config["pairs"], sample=config["samples"]),
-        wasp_result = "wasp_cht/cht_results.txt"
+        gr = "granges.rda"
+#        reads = expand("reads/sample_{pair}_{sample}_{read}.fasta", 
+#                       pair=config["pairs"], sample=config["samples"], 
+#                       read=config["reads"]),
+#        summarized_experiment = "txp_allelic_se.rda"
+#        hisat = expand("ht2_align/sample_{pair}_{sample}.bam",
+#                       pair=config["pairs"], sample=config["samples"]),
+#        wasp_counts = expand("wasp_cht/ref_as_counts.sample_{pair}_{sample}.h5",
+#                             pair=config["pairs"], sample=config["samples"]),
+#        wasp_result = "wasp_cht/cht_results.txt"
 
 rule make_expression:
     output:
