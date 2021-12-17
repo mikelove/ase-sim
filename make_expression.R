@@ -1,12 +1,9 @@
 cmd_args <- commandArgs(TRUE)
 fastafile <- cmd_args[1]
 grangesfile <- cmd_args[2]
-reffile <- cmd_args[3]
-chrfile <- cmd_args[4]
-altfile <- cmd_args[5]
-vcffile <- cmd_args[6]
-hapfile <- cmd_args[7]
-testtargetfile <- cmd_args[8]
+chrfile <- cmd_args[3]
+vcffile <- cmd_args[4]
+testtargetfile <- cmd_args[5]
 
 library(AnnotationHub)
 library(ensembldb)
@@ -140,29 +137,20 @@ cdna_alt <- extractTranscriptSeqs(genome_alt, ebt)
 
 # STEP 2 - write out various genome-based files for downstream tools
 
-# write out the ref genome for HISAT
-rtracklayer::export(dna, con=reffile)
-
 # write out individual chroms for WASP
 for (chr in names(dna)) {
   rtracklayer::export(dna[chr], con=sub("2L",chr,chrfile))
 }
 
-# write the alt alleles to a TSV, first make a 1-based position table
+# alt alleles table
 stopifnot(all(lengths(spl_at) == lengths(alt_allele)))
 alt_chr <- rep(names(spl_at), lengths(spl_at))
-alt_table <- data.frame(type=rep("single", length(alt_chr)),
-                        chr=alt_chr,
+alt_table <- data.frame(chr=alt_chr,
                         pos=unlist(spl_at),
                         ref=unlist(ref_allele),
                         alt=unlist(alt_allele))
 alt_table <- alt_table[order(alt_table$chr, alt_table$pos),]
 rownames(alt_table) <- paste0("rs",seq_along(alt_chr))
-
-# HISAT requires a 0-based position, so alter the 1-based table
-alt_table0 <- alt_table
-alt_table0$pos <- alt_table0$pos - 1 
-write.table(alt_table0, file=altfile, quote=FALSE, sep="\t", col.names=FALSE)
 
 # VCF files, one per chrom, for WASP
 vcf_table <- data.frame(CHROM=alt_table$chr, POS=alt_table$pos, ID=rownames(alt_table),
@@ -174,16 +162,6 @@ for (chr in names(dna)) {
               quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
   system(paste0("sed -i -e 's/CHROM/#CHROM/' ",sub("2L",chr,vcffile)))
 }
-
-# the haplotype files, for HISAT
-haps <- split(rownames(alt_table0), alt_table0$chr)
-haps <- sapply(haps, paste0, collapse=",")
-haps_table <- data.frame(chr=names(haps),
-                         pos1=0,
-                         post2=width(dna),
-                         snps=haps,
-                         row.names=paste0("ht",seq_along(haps)))
-write.table(haps_table, file=hapfile, quote=FALSE, sep="\t", col.names=FALSE)
 
 # the test SNP and target regions for WASP
 red_ebg <- reduce(ebg)

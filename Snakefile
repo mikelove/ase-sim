@@ -8,11 +8,12 @@ MAPPING = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/mapping"
 
 rule all:
     input: 
-        gr = "granges.rda"
-#        reads = expand("reads/sample_{pair}_{sample}_{read}.fasta", 
+        gr = "granges.rda",
+#        reads = expand("reads/sample_{pair}_{sample}_{read}.shuffled.fasta.gz", 
 #                       pair=config["pairs"], sample=config["samples"], 
-#                       read=config["reads"]),
-#        summarized_experiment = "txp_allelic_se.rda"
+#                       read=config["reads"])
+#        summarized_experiment = "txp_allelic_se.rda",
+        one_hisat = "ht2_align/sample_A_1.bam"
 #        hisat = expand("ht2_align/sample_{pair}_{sample}.bam",
 #                       pair=config["pairs"], sample=config["samples"]),
 #        wasp_counts = expand("wasp_cht/ref_as_counts.sample_{pair}_{sample}.h5",
@@ -23,16 +24,12 @@ rule make_expression:
     output:
         txps_fa = "transcripts.fa",
 	granges = "granges.rda",
-        ref = "data/drosophila_ref.fasta",
         chr = "data/drosophila_chr_2L.fasta",
-        alt = "data/drosophila_alt_zero-based.tsv",
         vcf = "data/drosophila_chr_2L.vcf",
-        haps = "data/drosophila_alt.haps",
         tt = "data/drosophila_test_target.txt"
     shell:
         "R CMD BATCH --no-save --no-restore '--args {output.txps_fa} {output.granges} "
-        "{output.ref} {output.chr} {output.alt} {output.vcf} {output.haps} {output.tt}' "
-        "make_expression.R"
+        "{output.chr} {output.vcf} {output.tt}' make_expression.R"
 
 rule make_reads:
     input:
@@ -56,9 +53,23 @@ rule make_reads:
         mv reads/{params.pair}/sample_02_2.fasta {output.r22}
         """
 
+rule shuffle_reads:
+    input:
+        r1 = "{sample}_1.fasta",
+	r2 = "{sample}_2.fasta"
+    output:
+        r1 = "{sample}_1.shuffled.fasta",
+	r2 = "{sample}_2.shuffled.fasta"
+    shell:
+        """
+        ./shuffle.sh -l {input.r1} -r {input.r2}
+        rm -f {input.r1}
+        rm -f {input.r2}
+        """
+
 rule compress_reads:
-    input: "{sample}.fasta"
-    output: "{sample}.fasta.gz"
+    input: "{sample}.shuffled.fasta"
+    output: "{sample}.shuffled.fasta.gz"
     params:
         threads = "12"
     shell: "pigz -p {params.threads} {input}"
@@ -72,8 +83,8 @@ rule salmon_index:
 
 rule salmon_quant:
     input:
-        r1 = "reads/{sample}_1.fasta.gz",
-        r2 = "reads/{sample}_2.fasta.gz",
+        r1 = "reads/{sample}_1.shuffled.fasta.gz",
+        r2 = "reads/{sample}_2.shuffled.fasta.gz",
         index = "anno/salmon-index-1.5.2"
     output:
         "quants/{sample}/quant.sf"
@@ -96,33 +107,14 @@ rule import_quants:
     shell:
         "R CMD BATCH --no-save --no-restore '--args {params.nsamp}' import_quants.R"
 
-rule hisat_ss:
-    input: "data/Drosophila_melanogaster.BDGP6.28.100.ss.gz"
-    output: "data/Drosophila_melanogaster.BDGP6.28.100.ss"
-    shell:
-        "gunzip -c {input} > {output}"
-
-rule hisat_index:
-    input: 
-        ref = "data/drosophila_ref.fasta",
-        alt = "data/drosophila_alt_zero-based.tsv",
-        haps = "data/drosophila_alt.haps",
-        ss = "data/Drosophila_melanogaster.BDGP6.28.100.ss"
-    output: "anno/bdgp6_sim/genome.1.ht2"
-    params:
-        threads = "12"
-    shell:
-        "hisat2-build-s -p {params.threads} -f --snp {input.alt} --haplotype {input.haps} "
-        "--ss {input.ss} {input.ref} anno/bdgp6_sim/genome"
-
 rule hisat_align:
     input:
-        index = "anno/bdgp6_sim/genome.1.ht2",
-        r1 = "reads/{sample}_1.fasta.gz",
-        r2 = "reads/{sample}_2.fasta.gz"
+        index = "anno/hisat2_bdgp6/genome.1.ht2",
+        r1 = "reads/{sample}_1.shuffled.fasta.gz",
+        r2 = "reads/{sample}_2.shuffled.fasta.gz"
     output: "ht2_align/{sample}.bam"
     params:
-        xdir = "anno/bdgp6_sim/genome",
+        xdir = "anno/hisat2_bdgp6/genome",
         temp_sam = "ht2_align/{sample}.unfilt.sam",
         threads = "12",
         mem = "1G" # per thread
@@ -177,7 +169,7 @@ rule hisat_align_flip:
         remap_fq2 = "wasp_mapping/{sample}.remap.fq2.gz"
     output: "wasp_mapping/{sample}.map2.bam"
     params:
-        xdir = "anno/bdgp6_sim/genome",
+        xdir = "anno/hisat2_bdgp6/genome",
         temp_sam = "wasp_mapping/{sample}.unfilt.sam",
         threads = "12",
         mem = "1G"
@@ -319,13 +311,3 @@ rule CHT:
         --bnb_disp wasp_cht/cht_bnb_coef.txt --as_disp wasp_cht/cht_as_coef.txt \
         wasp_cht/cht_input_files.txt {output}
         """
-
-# rule shuffle:
-#     input:
-#         r1 = "reads/{sample}_1.fasta",
-# 	r2 = "reads/{sample}_2.fasta"
-#     output:
-#         r1 = "reads/{sample}_1.shuffled.fa",
-# 	r2 = "reads/{sample}_2.shuffled.fa"
-#     shell:
-#         "./shuffle.sh -l {input.r1} -r {input.r2}"

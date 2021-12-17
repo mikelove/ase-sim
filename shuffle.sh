@@ -31,8 +31,8 @@ dirname_right=`dirname $right_file`
 
 if [ $dirname_left == $dirname_right ]
 then
-    fl=${base_left%*.fasta}.shuffled.fa
-    fr=${base_right%*.fasta}.shuffled.fa
+    fl=${base_left%*.fasta}.shuffled.fasta
+    fr=${base_right%*.fasta}.shuffled.fasta
     out_left="$dirname_left/${fl}"
     out_right="$dirname_right/${fr}"
     cmd="/usr/bin/time paste ${left_file} ${right_file} | paste - - | shuf | awk '{print \$1 > \"$out_left\"; print \$3 > \"$out_left\"; print \$2 > \"$out_right\"; print \$4 > \"$out_right\"}'"
