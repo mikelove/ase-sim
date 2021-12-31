@@ -9,16 +9,15 @@ MAPPING = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/mapping"
 rule all:
     input: 
         gr = "granges.rda",
-#        reads = expand("reads/sample_{pair}_{sample}_{read}.shuffled.fasta.gz", 
-#                       pair=config["pairs"], sample=config["samples"], 
-#                       read=config["reads"])
-#        summarized_experiment = "txp_allelic_se.rda",
-        one_hisat = "ht2_align/sample_A_1.bam"
-#        hisat = expand("ht2_align/sample_{pair}_{sample}.bam",
-#                       pair=config["pairs"], sample=config["samples"]),
-#        wasp_counts = expand("wasp_cht/ref_as_counts.sample_{pair}_{sample}.h5",
-#                             pair=config["pairs"], sample=config["samples"]),
-#        wasp_result = "wasp_cht/cht_results.txt"
+        reads = expand("reads/sample_{pair}_{sample}_{read}.shuffled.fasta.gz", 
+                       pair=config["pairs"], sample=config["samples"], 
+                       read=config["reads"]),
+        summarized_experiment = "txp_allelic_se.rda",
+        hisat = expand("ht2_align/sample_{pair}_{sample}.bam",
+                       pair=config["pairs"], sample=config["samples"]),
+        wasp_counts = expand("wasp_cht/ref_as_counts.sample_{pair}_{sample}.h5",
+                             pair=config["pairs"], sample=config["samples"]),
+        wasp_result = "wasp_cht/cht_results.txt"
 
 rule make_expression:
     output:
@@ -26,10 +25,11 @@ rule make_expression:
 	granges = "granges.rda",
         chr = "data/drosophila_chr_2L.fasta",
         vcf = "data/drosophila_chr_2L.vcf",
-        tt = "data/drosophila_test_target.txt"
+        tt = "data/drosophila_test_target.txt",
+        mmseq = "data/transcripts_mmseq.fa"
     shell:
         "R CMD BATCH --no-save --no-restore '--args {output.txps_fa} {output.granges} "
-        "{output.chr} {output.vcf} {output.tt}' make_expression.R"
+        "{output.chr} {output.vcf} {output.tt} {output.mmseq}' make_expression.R"
 
 rule make_reads:
     input:

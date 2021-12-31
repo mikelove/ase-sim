@@ -4,6 +4,7 @@ grangesfile <- cmd_args[2]
 chrfile <- cmd_args[3]
 vcffile <- cmd_args[4]
 testtargetfile <- cmd_args[5]
+mmseqfile <- cmd_args[6]
 
 library(AnnotationHub)
 library(ensembldb)
@@ -281,3 +282,11 @@ names(cdna_both) <- paste0(names(cdna_both), "_",
 
 # write out FASTA
 writeXStringSet(cdna_both, file=fastafile)
+
+# write out FASTA reference for mmseq
+cdna_mmseq <- cdna_both
+names(cdna_mmseq) <- paste0(names(cdna_mmseq), "_",
+                           rep(c("M","P"),each=length(gene)),
+                           " gene:", gene, "_",
+                           rep(c("M","P"),each=length(gene)))
+writeXStringSet(cdna_mmseq, file=mmseqfile)
