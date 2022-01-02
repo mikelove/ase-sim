@@ -8,16 +8,18 @@ MAPPING = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/mapping"
 
 rule all:
     input: 
-        gr = "granges.rda",
-        reads = expand("reads/sample_{pair}_{sample}_{read}.shuffled.fasta.gz", 
-                       pair=config["pairs"], sample=config["samples"], 
-                       read=config["reads"]),
-        summarized_experiment = "txp_allelic_se.rda",
-        hisat = expand("ht2_align/sample_{pair}_{sample}.bam",
-                       pair=config["pairs"], sample=config["samples"]),
-        wasp_counts = expand("wasp_cht/ref_as_counts.sample_{pair}_{sample}.h5",
-                             pair=config["pairs"], sample=config["samples"]),
-        wasp_result = "wasp_cht/cht_results.txt"
+        # gr = "granges.rda",
+        # reads = expand("reads/sample_{pair}_{sample}_{read}.shuffled.fasta.gz", 
+        #                pair=config["pairs"], sample=config["samples"], 
+        #                read=config["reads"]),
+        # summarized_experiment = "txp_allelic_se.rda",
+        # hisat = expand("ht2_align/sample_{pair}_{sample}.bam",
+        #                pair=config["pairs"], sample=config["samples"]),
+        # wasp_counts = expand("wasp_cht/ref_as_counts.sample_{pair}_{sample}.h5",
+        #                      pair=config["pairs"], sample=config["samples"]),
+        # wasp_result = "wasp_cht/cht_results.txt"
+        mmseq = expand("mmseq/sample_{pair}_{sample}.bam",
+                       pair=config["pairs"], sample=config["samples"])
 
 rule make_expression:
     output:
@@ -310,4 +312,34 @@ rule CHT:
         {CHT}/combined_test.py --min_as_counts 10 \
         --bnb_disp wasp_cht/cht_bnb_coef.txt --as_disp wasp_cht/cht_as_coef.txt \
         wasp_cht/cht_input_files.txt {output}
+        """
+
+rule mmseq_index:
+    input: "data/transcripts_mmseq.fa"
+    output: "anno/bt_index/index.1.ebwt"
+    params:
+        dir = "anno/bt_index/index",
+        threads = "12"
+    shell:
+        "bowtie-build --offrate 3 --threads {params.threads} {input} {params.dir}"
+
+rule mmseq_align:
+    input:
+        r1 = "reads/{sample}_1.shuffled.fasta.gz",
+        r2 = "reads/{sample}_2.shuffled.fasta.gz",
+        index = "anno/bt_index/index.1.ebwt"
+    output: "mmseq/{sample}.bam"
+    params:
+        dir = "anno/bt_index/index",
+        threads = "12",
+        mem = "1G",
+        m = "100",
+        X = "500",
+        chunkmbs = "256"
+    shell:
+        """
+        bowtie -a --best --strata -S -m {params.m} -X {params.X} --chunkmbs {params.chunkmbs} \
+        -p {params.threads} -f -x {params.dir} \
+        -1 <(gzip -dc {input.r1}) -2 <(gzip -dc {input.r2}) | \
+        samtools view -F 0xC -bS - | samtools sort -@ {params.threads} -m {params.mem} -n - -o {output}
         """

@@ -12,6 +12,8 @@ Version: 0.0.4
 * `hisat2/2.2.1`
 * `samtools/1.13`
 * `wasp/2019-12`
+* `bowtie/1.3.1`
+* `mmseq/1.0.10a`
 
 ## Directories
 
