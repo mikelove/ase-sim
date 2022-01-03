@@ -1,10 +1,9 @@
 configfile: "config.json"
 
 SALMON = "/proj/milovelab/bin/salmon-1.5.2_linux_x86_64/bin/salmon"
-
 CHT = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/CHT"
-
 MAPPING = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/mapping"
+MMSEQ = "/proj/milovelab/bin/mmseq-1.0.10a/bin"
 
 rule all:
     input: 
@@ -18,7 +17,7 @@ rule all:
         # wasp_counts = expand("wasp_cht/ref_as_counts.sample_{pair}_{sample}.h5",
         #                      pair=config["pairs"], sample=config["samples"]),
         # wasp_result = "wasp_cht/cht_results.txt"
-        mmseq = expand("mmseq/sample_{pair}_{sample}.bam",
+        mmseq = expand("mmseq/sample_{pair}_{sample}.mmseq",
                        pair=config["pairs"], sample=config["samples"])
 
 rule make_expression:
@@ -343,3 +342,20 @@ rule mmseq_align:
         -1 <(gzip -dc {input.r1}) -2 <(gzip -dc {input.r2}) | \
         samtools view -F 0xC -bS - | samtools sort -@ {params.threads} -m {params.mem} -n - -o {output}
         """
+
+rule mmseq_bam2hits:
+    input: 
+        ref = "data/transcripts_mmseq.fa",
+        bam = "mmseq/{sample}.bam"
+    output: "mmseq/{sample}.hits"
+    params:
+        threads = "12"
+    shell: "OMP_NUM_THREADS={params.threads} {MMSEQ}/bam2hits-linux {input.ref} {input.bam} > {output}"
+
+rule mmseq_quant:
+    input: "mmseq/{sample}.hits"
+    output: "mmseq/{sample}.mmseq"
+    params:
+        name = "mmseq/{sample}",
+        threads = "12"
+    shell: "OMP_NUM_THREADS={params.threads} {MMSEQ}/mmseq-linux {input} {params.name}"

@@ -23,9 +23,11 @@ The following directory structure is needed:
 anno
 data
 ht2_align
+mmseq
 quants
 reads
-wasp
+wasp_cht
+wasp_mapping
 ```
 
 ## Provenance of included files
