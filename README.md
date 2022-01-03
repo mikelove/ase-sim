@@ -2,9 +2,9 @@
 
 ## Simulation for creating allelic expression from fly genome
 
-Author: Michael Love
-Last modified: Dec 16 2021
-Version: 0.0.4
+Author: Michael Love and Euphy Wu
+Last modified: Jan 3 2022
+Version: 0.0.5
 
 ## Software versions used:
 
