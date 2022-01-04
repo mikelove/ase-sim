@@ -17,8 +17,7 @@ rule all:
         # wasp_counts = expand("wasp_cht/ref_as_counts.sample_{pair}_{sample}.h5",
         #                      pair=config["pairs"], sample=config["samples"]),
         # wasp_result = "wasp_cht/cht_results.txt"
-        mmseq = expand("mmseq/sample_{pair}_{sample}.mmseq",
-                       pair=config["pairs"], sample=config["samples"])
+        mmseq = "mmseq/mmdiff_results.txt"
 
 rule make_expression:
     output:
@@ -359,3 +358,25 @@ rule mmseq_quant:
         name = "mmseq/{sample}",
         threads = "12"
     shell: "OMP_NUM_THREADS={params.threads} {MMSEQ}/mmseq-linux {input} {params.name}"
+
+rule mmseq_split:
+    input: "mmseq/{sample}.mmseq"
+    output: 
+        m = "mmseq/{sample}.mmseq_m",
+        p = "mmseq/{sample}.mmseq_p"
+    shell:
+        """
+        R CMD BATCH --no-save --no-restore \
+          '--args {input} {output.m} {output.p}' mmseq_split_sample.R
+        """
+
+rule mmdiff:
+    input: 
+        m = expand("mmseq/sample_{pair}_{sample}.mmseq_m",
+                   pair=config["pairs"], sample=config["samples"]),
+        p = expand("mmseq/sample_{pair}_{sample}.mmseq_p",
+                   pair=config["pairs"], sample=config["samples"])
+    output: "mmseq/mmdiff_results.txt"
+    params:
+        n = 2 * len(config["pairs"])
+    shell: "{MMSEQ}/mmdiff-linux -de {params.n} {params.n} {input.m} {input.p} > {output}"
