@@ -9,7 +9,7 @@ trace <- read_delim(mmseqfile, col_names=FALSE, skip=1)
 trace <- trace[,-ncol(trace)]
 names <- scan(mmseqfile, what="char", n=ncol(trace))
 for (i in 1:2) {
-  outfile <- c(mfile, pfile)[i]
+  outfile <- sub(".gz","",c(mfile, pfile)[i])
   idx <- grep(c("M","P")[i], names)
   write(names[idx], file=outfile, ncolumns=length(idx))
   write.table(trace[,idx], file=outfile,
