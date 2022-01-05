@@ -4,6 +4,7 @@ SALMON = "/proj/milovelab/bin/salmon-1.5.2_linux_x86_64/bin/salmon"
 CHT = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/CHT"
 MAPPING = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/mapping"
 MMSEQ = "/proj/milovelab/bin/mmseq-1.0.10a/bin"
+TERMINUS = "/proj/milovelab/bin/terminus/target/release/terminus"
 
 rule all:
     input: 
@@ -17,7 +18,9 @@ rule all:
         # wasp_counts = expand("wasp_cht/ref_as_counts.sample_{pair}_{sample}.h5",
         #                      pair=config["pairs"], sample=config["samples"]),
         # wasp_result = "wasp_cht/cht_results.txt"
-        mmseq = "mmseq/mmdiff_results.txt"
+        # mmseq = "mmseq/mmdiff_results.txt"
+        terminus = expand("terminus/sample_{pair}_{sample}",
+                          pair=config["pairs"], sample=config["samples"])
 
 rule make_expression:
     output:
@@ -26,10 +29,11 @@ rule make_expression:
         chr = "data/drosophila_chr_2L.fasta",
         vcf = "data/drosophila_chr_2L.vcf",
         tt = "data/drosophila_test_target.txt",
-        mmseq = "data/transcripts_mmseq.fa"
+        mmseq = "data/transcripts_mmseq.fa",
+        t2g = "data/t2g.tsv"
     shell:
         "R CMD BATCH --no-save --no-restore '--args {output.txps_fa} {output.granges} "
-        "{output.chr} {output.vcf} {output.tt} {output.mmseq}' make_expression.R"
+        "{output.chr} {output.vcf} {output.tt} {output.mmseq} {output.t2g}' make_expression.R"
 
 rule make_reads:
     input:
@@ -380,3 +384,8 @@ rule mmdiff:
     params:
         n = 2 * len(config["pairs"])
     shell: "{MMSEQ}/mmdiff-linux -de {params.n} {params.n} {input.m} {input.p} > {output}"
+
+rule terminus_group:
+    input:
+    output:
+    shell:

@@ -5,6 +5,7 @@ chrfile <- cmd_args[3]
 vcffile <- cmd_args[4]
 testtargetfile <- cmd_args[5]
 mmseqfile <- cmd_args[6]
+t2gfile <- cmd_args[7]
 
 library(AnnotationHub)
 library(ensembldb)
@@ -271,6 +272,10 @@ mcols(txps)$width <- width(cdna)
 
 # write out GRanges (with abundance)
 save(g, ebg, ebt, tbg, txps, genes_to_alter, file=grangesfile)
+
+# write out the t2g file for terminus
+write.table(mcols(txps)[,c("tx_id","gene_id")], file=t2gfile,
+            quote=FALSE, row.names=FALSE, col.names=FALSE, sep="\t")
 
 # combine the original and altered transcripts
 cdna_both <- c(cdna, cdna_alt)
