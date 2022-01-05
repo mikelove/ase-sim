@@ -19,7 +19,7 @@ rule all:
         #                      pair=config["pairs"], sample=config["samples"]),
         # wasp_result = "wasp_cht/cht_results.txt"
         # mmseq = "mmseq/mmdiff_results.txt"
-        mmseq = expand("mmseq/sample_{pair}_{sample}.trace_gibbs_m.gz",
+        mmseq = expand("mmseq/sample_{pair}_{sample}_M.trace_gibbs.gz",
                        pair=config["pairs"], sample=config["samples"])
 
 rule make_expression:
@@ -366,8 +366,8 @@ rule mmseq_quant:
 rule mmseq_split:
     input: "mmseq/{sample}.mmseq"
     output: 
-        m = "mmseq/{sample}.mmseq_m",
-        p = "mmseq/{sample}.mmseq_p"
+        m = "mmseq/{sample}_M.mmseq",
+        p = "mmseq/{sample}_P.mmseq"
     shell:
         """
         R CMD BATCH --no-save --no-restore \
@@ -377,8 +377,8 @@ rule mmseq_split:
 rule mmseq_split_trace:
     input: "mmseq/{sample}.trace_gibbs.gz"
     output: 
-        m = "mmseq/{sample}.trace_gibbs_m.gz",
-        p = "mmseq/{sample}.trace_gibbs_p.gz"
+        m = "mmseq/{sample}_M.trace_gibbs.gz",
+        p = "mmseq/{sample}_P.trace_gibbs.gz"
     shell:
         """
         R CMD BATCH --no-save --no-restore \
@@ -387,9 +387,9 @@ rule mmseq_split_trace:
 
 rule mmdiff:
     input: 
-        m = expand("mmseq/sample_{pair}_{sample}.mmseq_m",
+        m = expand("mmseq/sample_{pair}_{sample}_M.mmseq",
                    pair=config["pairs"], sample=config["samples"]),
-        p = expand("mmseq/sample_{pair}_{sample}.mmseq_p",
+        p = expand("mmseq/sample_{pair}_{sample}_P.mmseq",
                    pair=config["pairs"], sample=config["samples"])
     output: "mmseq/mmdiff_results.txt"
     params:
