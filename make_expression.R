@@ -273,10 +273,6 @@ mcols(txps)$width <- width(cdna)
 # write out GRanges (with abundance)
 save(g, ebg, ebt, tbg, txps, genes_to_alter, file=grangesfile)
 
-# write out the t2g file for terminus
-write.table(mcols(txps)[,c("tx_id","gene_id")], file=t2gfile,
-            quote=FALSE, row.names=FALSE, col.names=FALSE, sep="\t")
-
 # combine the original and altered transcripts
 cdna_both <- c(cdna, cdna_alt)
 
@@ -287,6 +283,12 @@ names(cdna_both) <- paste0(names(cdna_both), "_",
 
 # write out FASTA
 writeXStringSet(cdna_both, file=fastafile)
+
+# write out the t2g file for terminus
+terminus_t2g <- data.frame(txp=names(cdna_both),
+                           gene=sub(".*(FBgn.*)","\\1",names(cdna_both)))
+write.table(terminus_t2g, file=t2gfile,
+            quote=FALSE, row.names=FALSE, col.names=FALSE, sep="\t")
 
 # write out FASTA reference for mmseq
 cdna_mmseq <- cdna_both

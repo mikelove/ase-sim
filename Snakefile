@@ -12,15 +12,15 @@ rule all:
         # reads = expand("reads/sample_{pair}_{sample}_{read}.shuffled.fasta.gz", 
         #                pair=config["pairs"], sample=config["samples"], 
         #                read=config["reads"]),
-        # summarized_experiment = "txp_allelic_se.rda",
+        # summarized_experiment = "txp_allelic_se.rda"
         # hisat = expand("ht2_align/sample_{pair}_{sample}.bam",
         #                pair=config["pairs"], sample=config["samples"]),
         # wasp_counts = expand("wasp_cht/ref_as_counts.sample_{pair}_{sample}.h5",
         #                      pair=config["pairs"], sample=config["samples"]),
         # wasp_result = "wasp_cht/cht_results.txt"
         # mmseq = "mmseq/mmdiff_results.txt"
-        terminus = expand("terminus/sample_{pair}_{sample}",
-                          pair=config["pairs"], sample=config["samples"])
+        mmseq = expand("mmseq/sample_{pair}_{sample}.trace_gibbs_m.gz",
+                       pair=config["pairs"], sample=config["samples"])
 
 rule make_expression:
     output:
@@ -98,7 +98,7 @@ rule salmon_quant:
 	nboot = "30"
     shell:
         "{SALMON} quant -i {input.index} -l IU -p {params.threads} "
-	"--numBootstraps {params.nboot} --dumpEq "
+	"--numBootstraps {params.nboot} -d "
         "-o {params.dir} -1 {input.r1} -2 {input.r2}"
 
 rule import_quants:
@@ -374,6 +374,17 @@ rule mmseq_split:
           '--args {input} {output.m} {output.p}' mmseq_split_sample.R
         """
 
+rule mmseq_split_trace:
+    input: "mmseq/{sample}.trace_gibbs.gz"
+    output: 
+        m = "mmseq/{sample}.trace_gibbs_m.gz",
+        p = "mmseq/{sample}.trace_gibbs_p.gz"
+    shell:
+        """
+        R CMD BATCH --no-save --no-restore \
+          '--args {input} {output.m} {output.p}' mmseq_split_trace.R
+        """
+
 rule mmdiff:
     input: 
         m = expand("mmseq/sample_{pair}_{sample}.mmseq_m",
@@ -385,7 +396,7 @@ rule mmdiff:
         n = 2 * len(config["pairs"])
     shell: "{MMSEQ}/mmdiff-linux -de {params.n} {params.n} {input.m} {input.p} > {output}"
 
-rule terminus_group:
-    input:
-    output:
-    shell:
+# rule terminus_group:
+#     input:
+#     output:
+#     shell:
