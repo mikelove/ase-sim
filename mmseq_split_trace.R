@@ -1,13 +1,13 @@
 cmd_args <- commandArgs(TRUE)
-mmseqfile <- cmd_args[1]
+tracefile <- cmd_args[1]
 mfile <- cmd_args[2]
 pfile <- cmd_args[3]
 library(readr)
 Sys.setenv("VROOM_CONNECTION_SIZE" = 131072 * 10)
-trace <- read_delim(mmseqfile, col_names=FALSE, skip=1)
+trace <- read_delim(tracefile, col_names=FALSE, skip=1)
 # the last column is extra
 trace <- trace[,-ncol(trace)]
-names <- scan(mmseqfile, what="char", n=ncol(trace))
+names <- scan(tracefile, what="char", n=ncol(trace))
 for (i in 1:2) {
   outfile <- sub(".gz","",c(mfile, pfile)[i])
   idx <- grep(c("M","P")[i], names)
@@ -19,7 +19,7 @@ for (i in 1:2) {
   R.utils::gzip(outfile)
 }
 # also the identical trace file
-identfile <- sub(".trace_gibbs.gz", ".identical.trace_gibbs.gz", mmseqfile)
+identfile <- sub(".trace_gibbs.gz", ".identical.trace_gibbs.gz", tracefile)
 itrace <- read_delim(identfile, col_names=FALSE, skip=1)
 itrace <- itrace[,-ncol(itrace)]
 inames <- scan(identfile, what="char", n=ncol(itrace))
