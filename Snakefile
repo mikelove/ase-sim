@@ -19,8 +19,10 @@ rule all:
         #                      pair=config["pairs"], sample=config["samples"]),
         # wasp_result = "wasp_cht/cht_results.txt"
         # mmseq = "mmseq/mmdiff_results.txt"
-        mmseq = expand("mmseq/sample_{pair}_{sample}_M.trace_gibbs.gz",
-                       pair=config["pairs"], sample=config["samples"])
+        mmseq = expand("mmseq/sample_{pair}_{sample}_M.mmseq",
+                       pair=config["pairs"], sample=config["samples"]),
+        mmseqt = expand("mmseq/sample_{pair}_{sample}_M.trace_gibbs.gz",
+                        pair=config["pairs"], sample=config["samples"])
 
 rule make_expression:
     output:
@@ -30,7 +32,8 @@ rule make_expression:
         vcf = "data/drosophila_chr_2L.vcf",
         tt = "data/drosophila_test_target.txt",
         mmseq = "data/transcripts_mmseq.fa",
-        t2g = "data/t2g.tsv"
+        t2g = "data/t2g.tsv",
+        a2t = "data/a2t.tsv"
     shell:
         "R CMD BATCH --no-save --no-restore '--args {output.txps_fa} {output.granges} "
         "{output.chr} {output.vcf} {output.tt} {output.mmseq} {output.t2g}' make_expression.R"

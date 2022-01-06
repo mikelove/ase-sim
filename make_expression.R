@@ -6,6 +6,7 @@ vcffile <- cmd_args[4]
 testtargetfile <- cmd_args[5]
 mmseqfile <- cmd_args[6]
 t2gfile <- cmd_args[7]
+a2tfile <- cmd_args[8]
 
 library(AnnotationHub)
 library(ensembldb)
@@ -284,10 +285,14 @@ names(cdna_both) <- paste0(names(cdna_both), "_",
 # write out FASTA
 writeXStringSet(cdna_both, file=fastafile)
 
-# write out the t2g file for terminus
+# write out the t2g and a2t files for terminus
 terminus_t2g <- data.frame(txp=names(cdna_both),
                            gene=sub(".*(FBgn.*)","\\1",names(cdna_both)))
+terminus_a2t <- data.frame(allele=names(cdna_both),
+                           txp=sub("(FBtr.*?)_.*","\\1",names(cdna_both)))
 write.table(terminus_t2g, file=t2gfile,
+            quote=FALSE, row.names=FALSE, col.names=FALSE, sep="\t")
+write.table(terminus_a2t, file=a2tfile,
             quote=FALSE, row.names=FALSE, col.names=FALSE, sep="\t")
 
 # write out FASTA reference for mmseq
