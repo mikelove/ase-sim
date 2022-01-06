@@ -166,6 +166,11 @@ for (chr in names(dna)) {
   system(paste0("sed -i -e 's/CHROM/#CHROM/' ",sub("2L",chr,vcffile)))
 }
 
+# VCF file (just one) for WASP2
+write.table(vcf_table, file=sub("chr_2L","wg",vcffile),
+            quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
+system(paste0("sed -i -e 's/CHROM/#CHROM/' ",sub("chr_2L","wg",vcffile)))
+
 # the test SNP and target regions for WASP
 red_ebg <- reduce(ebg)
 left_pos <- sapply(at_per_gene, min)
