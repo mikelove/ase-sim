@@ -22,6 +22,8 @@ rule all:
         mmseq = expand("mmseq/sample_{pair}_{sample}_M.mmseq",
                        pair=config["pairs"], sample=config["samples"]),
         mmseqt = expand("mmseq/sample_{pair}_{sample}_M.trace_gibbs.gz",
+                        pair=config["pairs"], sample=config["samples"]),
+        mmseqM = expand("mmseq/sample_{pair}_{sample}_M.M",
                         pair=config["pairs"], sample=config["samples"])
 
 rule make_expression:
@@ -388,6 +390,23 @@ rule mmseq_split_trace:
           '--args {input} {output.m} {output.p}' mmseq_split_trace.R
         """
 
+rule mmseq_split_bigm_and_k:
+    input: 
+        bigm = "mmseq/{sample}.M",
+        k = "mmseq/{sample}.k"
+    output: 
+        bigm_m = "mmseq/{sample}_M.M",
+        bigm_p = "mmseq/{sample}_P.M",
+        k_m = "mmseq/{sample}_M.k",
+        k_p = "mmseq/{sample}_P.k"
+    shell:
+        """
+        R CMD BATCH --no-save --no-restore \
+          '--args {input.bigm} {output.bigm_m} {output.bigm_p}' mmseq_split_bigm.R
+        cp {input.k} {output.k_m}
+        cp {input.k} {output.k_p}
+        """
+
 rule mmdiff:
     input: 
         m = expand("mmseq/sample_{pair}_{sample}_M.mmseq",
@@ -398,8 +417,3 @@ rule mmdiff:
     params:
         n = 2 * len(config["pairs"])
     shell: "{MMSEQ}/mmdiff-linux -de {params.n} {params.n} {input.m} {input.p} > {output}"
-
-# rule terminus_group:
-#     input:
-#     output:
-#     shell:
