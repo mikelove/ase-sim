@@ -6,6 +6,8 @@ MAPPING = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/mapping"
 MMSEQ = "/proj/milovelab/bin/mmseq-1.0.10a/bin"
 TERMINUS = "/proj/milovelab/bin/terminus/target/release/terminus"
 
+END = ["mmseq","trace_gibbs.gz","M"]
+
 rule all:
     input: 
         # gr = "granges.rda",
@@ -19,8 +21,8 @@ rule all:
         #                      pair=config["pairs"], sample=config["samples"]),
         # wasp_result = "wasp_cht/cht_results.txt"
         # mmseq = "mmseq/mmdiff_results.txt"
-        mmseq = expand("mmseq/sample_{pair}_{sample}_{allele}.collapsed.mmseq",
-                       pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
+        mmseq = expand("mmseq/sample_{pair}_{sample}_{allele}.{end}",
+                       pair=config["pairs"], sample=config["samples"], allele=config["alleles"], end=END)
 
 rule make_expression:
     output:

@@ -27,7 +27,7 @@ for (i in 1:2) {
   ioutfile <- sub(".trace_gibbs.gz",".identical.trace_gibbs",c(mfile, pfile)[i])
   idx <- grep(c("M","P")[i], inames)
   itracenames <- inames[idx]
-  itracenames <- sub("_.","",itracenames)
+  itracenames <- gsub("_.","",itracenames)
   write(itracenames, file=ioutfile, ncolumns=length(idx))
   write.table(itrace[,idx], file=ioutfile,
               quote=FALSE, row.names=FALSE, col.names=FALSE, sep=" ", append=TRUE)
