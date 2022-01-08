@@ -23,11 +23,14 @@ identfile <- sub(".trace_gibbs.gz", ".identical.trace_gibbs.gz", tracefile)
 itrace <- read_delim(identfile, col_names=FALSE, skip=1)
 itrace <- itrace[,-ncol(itrace)]
 inames <- scan(identfile, what="char", n=ncol(itrace))
+# because the identical groups are labelled differently across samples
+dedup <- function(x) unlist(lapply(strsplit(x,"\\+"), function(z) paste(sort(z),collapse="+")))
 for (i in 1:2) {
   ioutfile <- sub(".trace_gibbs.gz",".identical.trace_gibbs",c(mfile, pfile)[i])
   idx <- grep(c("M","P")[i], inames)
   itracenames <- inames[idx]
   itracenames <- gsub("_.","",itracenames)
+  itracenames <- dedup(itracenames)
   write(itracenames, file=ioutfile, ncolumns=length(idx))
   write.table(itrace[,idx], file=ioutfile,
               quote=FALSE, row.names=FALSE, col.names=FALSE, sep=" ", append=TRUE)
