@@ -19,12 +19,8 @@ rule all:
         #                      pair=config["pairs"], sample=config["samples"]),
         # wasp_result = "wasp_cht/cht_results.txt"
         # mmseq = "mmseq/mmdiff_results.txt"
-        mmseq = expand("mmseq/sample_{pair}_{sample}_M.mmseq",
-                       pair=config["pairs"], sample=config["samples"]),
-        mmseqt = expand("mmseq/sample_{pair}_{sample}_M.trace_gibbs.gz",
-                        pair=config["pairs"], sample=config["samples"]),
-        mmseqM = expand("mmseq/sample_{pair}_{sample}_M.M",
-                        pair=config["pairs"], sample=config["samples"])
+        mmseq = expand("mmseq/sample_{pair}_{sample}_{allele}.collapsed.mmseq",
+                       pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
 
 rule make_expression:
     output:
@@ -406,6 +402,17 @@ rule mmseq_split_bigm_and_k:
         cp {input.k} {output.k_m}
         cp {input.k} {output.k_p}
         """
+
+rule mmcollapse:
+    input: 
+        mmseq = expand("mmseq/sample_{pair}_{sample}_{allele}.mmseq", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
+        trace = expand("mmseq/sample_{pair}_{sample}_{allele}.trace_gibbs.gz", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
+        bigm = expand("mmseq/sample_{pair}_{sample}_{allele}.M", pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
+    output: expand("mmseq/sample_{pair}_{sample}_{allele}.collapsed.mmseq", pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
+    params:
+        basename = expand("mmseq/sample_{pair}_{sample}_{allele}", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
+        threads = "12" # requires 1.5 Gb per thread
+    shell: "OMP_NUM_THREADS={params.threads} {MMSEQ}/mmcollapse-linux {params.basename}"
 
 rule mmdiff:
     input: 
