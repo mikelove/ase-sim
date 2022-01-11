@@ -307,3 +307,5 @@ names(cdna_mmseq) <- paste0(names(cdna_mmseq), "_",
                            " gene:", gene, "_",
                            rep(c("M","P"),each=length(gene)))
 writeXStringSet(cdna_mmseq, file=mmseqfile)
+writeXStringSet(cdna_mmseq[!duplicated(cdna_mmseq)],
+                file=sub(".fa","_nodup.fa",mmseqfile))

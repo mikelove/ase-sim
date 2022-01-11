@@ -7,12 +7,13 @@ sparse <- read.table(bigmfile, skip=1)
 library(Matrix)
 incidence <- sparseMatrix(i=sparse$V1, j=sparse$V2, index1=FALSE)
 midx <- grepl("_M", header)
-mtxp <- sub("_.","",header[midx])
-ptxp <- sub("_.","",header[!midx])
+mtxp <- gsub("_.","",header[midx])
+ptxp <- gsub("_.","",header[!midx])
 mincidence <- incidence[,midx]
 pincidence <- incidence[,!midx]
-matches <- match(mtxp, ptxp) # to re-order P matrix to match M
-pincidence <- pincidence[,matches]
+common <- intersect(mtxp, ptxp)
+mincidence <- mincidence[,match(common, mtxp)]
+pincidence <- pincidence[,match(common, ptxp)]
 together <- mincidence + pincidence
 together <- as(together, "dgTMatrix")
 dat <- data.frame(i=together@i, j=together@j)

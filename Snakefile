@@ -6,8 +6,6 @@ MAPPING = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/mapping"
 MMSEQ = "/proj/milovelab/bin/mmseq-1.0.10a/bin"
 TERMINUS = "/proj/milovelab/bin/terminus/target/release/terminus"
 
-END = ["mmseq","trace_gibbs.gz","M"]
-
 rule all:
     input: 
         # gr = "granges.rda",
@@ -21,8 +19,9 @@ rule all:
         #                      pair=config["pairs"], sample=config["samples"]),
         # wasp_result = "wasp_cht/cht_results.txt"
         # mmseq = "mmseq/mmdiff_results.txt"
-        mmseq = expand("mmseq/sample_{pair}_{sample}_{allele}.{end}",
-                       pair=config["pairs"], sample=config["samples"], allele=config["alleles"], end=END)
+        mmseq = "mmseq/mmdiff_gene_results.txt"
+        # mmseq = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.collapsed.mmseq",
+        #               pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
 
 rule make_expression:
     output:
@@ -328,6 +327,15 @@ rule mmseq_index:
     shell:
         "bowtie-build --offrate 3 --threads {params.threads} {input} {params.dir}"
 
+rule mmseq_index_nodup:
+    input: "data/transcripts_mmseq_nodup.fa"
+    output: "anno/bt_index_nodup/index.1.ebwt"
+    params:
+        dir = "anno/bt_index_nodup/index",
+        threads = "12"
+    shell:
+        "bowtie-build --offrate 3 --threads {params.threads} {input} {params.dir}"
+
 rule mmseq_align:
     input:
         r1 = "reads/{sample}_1.shuffled.fasta.gz",
@@ -336,6 +344,27 @@ rule mmseq_align:
     output: "mmseq/{sample}.bam"
     params:
         dir = "anno/bt_index/index",
+        threads = "12",
+        mem = "1G",
+        m = "100",
+        X = "500",
+        chunkmbs = "256"
+    shell:
+        """
+        bowtie -a --best --strata -S -m {params.m} -X {params.X} --chunkmbs {params.chunkmbs} \
+        -p {params.threads} -f -x {params.dir} \
+        -1 <(gzip -dc {input.r1}) -2 <(gzip -dc {input.r2}) | \
+        samtools view -F 0xC -bS - | samtools sort -@ {params.threads} -m {params.mem} -n - -o {output}
+        """
+
+rule mmseq_align_nodup:
+    input:
+        r1 = "reads/{sample}_1.shuffled.fasta.gz",
+        r2 = "reads/{sample}_2.shuffled.fasta.gz",
+        index = "anno/bt_index_nodup/index.1.ebwt"
+    output: "mmseq_nodup/{sample}.bam"
+    params:
+        dir = "anno/bt_index_nodup/index",
         threads = "12",
         mem = "1G",
         m = "100",
@@ -358,63 +387,95 @@ rule mmseq_bam2hits:
         threads = "12"
     shell: "OMP_NUM_THREADS={params.threads} {MMSEQ}/bam2hits-linux {input.ref} {input.bam} > {output}"
 
-rule mmseq_quant:
-    input: "mmseq/{sample}.hits"
-    output: "mmseq/{sample}.mmseq"
+rule mmseq_bam2hits_nodup:
+    input: 
+        ref = "data/transcripts_mmseq_nodup.fa",
+        bam = "mmseq_nodup/{sample}.bam"
+    output: "mmseq_nodup/{sample}.hits"
     params:
-        name = "mmseq/{sample}",
+        threads = "12"
+    shell: "OMP_NUM_THREADS={params.threads} {MMSEQ}/bam2hits-linux {input.ref} {input.bam} > {output}"
+
+rule mmseq_quant:
+    input: "{sample}.hits"
+    output: "{sample}.mmseq"
+    params:
+        name = "{sample}",
         threads = "12"
     shell: "OMP_NUM_THREADS={params.threads} {MMSEQ}/mmseq-linux {input} {params.name}"
 
 rule mmseq_split:
-    input: "mmseq/{sample}.mmseq"
+    input: 
+        txp = "mmseq/{sample}.mmseq",
+        gene = "mmseq/{sample}.gene.mmseq"
     output: 
         m = "mmseq/{sample}_M.mmseq",
-        p = "mmseq/{sample}_P.mmseq"
+        p = "mmseq/{sample}_P.mmseq",
+        m_gene = "mmseq/{sample}_M.gene.mmseq",
+        p_gene = "mmseq/{sample}_P.gene.mmseq"
     shell:
         """
         R CMD BATCH --no-save --no-restore \
-          '--args {input} {output.m} {output.p}' mmseq_split_sample.R
+          '--args {input.txp} {output.m} {output.p}' mmseq_scripts/mmseq_split_sample.R
+        R CMD BATCH --no-save --no-restore \
+          '--args {input.gene} {output.m_gene} {output.p_gene}' mmseq_scripts/mmseq_split_sample.R
+        """
+
+rule mmseq_split_nodup:
+    input: "mmseq_nodup/{sample}.mmseq"
+    output: 
+        m = "mmseq_nodup/{sample}_M.mmseq",
+        p = "mmseq_nodup/{sample}_P.mmseq"
+    params:
+        base = "mmseq_nodup/{sample}"
+    shell:
+        """
+        R CMD BATCH --no-save --no-restore \
+          '--args {input} {output.m} {output.p}' mmseq_scripts/mmseq_split_sample.R
+        cp {params.base}.identical.mmseq {params.base}_M.identical.mmseq
+        cp {params.base}.identical.mmseq {params.base}_P.identical.mmseq
+        cp {params.base}.identical.trace_gibbs.gz {params.base}_M.identical.trace_gibbs.gz
+        cp {params.base}.identical.trace_gibbs.gz {params.base}_P.identical.trace_gibbs.gz
         """
 
 rule mmseq_split_trace:
-    input: "mmseq/{sample}.trace_gibbs.gz"
+    input: "mmseq_nodup/{sample}.trace_gibbs.gz"
     output: 
-        m = "mmseq/{sample}_M.trace_gibbs.gz",
-        p = "mmseq/{sample}_P.trace_gibbs.gz"
+        m = "mmseq_nodup/{sample}_M.trace_gibbs.gz",
+        p = "mmseq_nodup/{sample}_P.trace_gibbs.gz"
     shell:
         """
         R CMD BATCH --no-save --no-restore \
-          '--args {input} {output.m} {output.p}' mmseq_split_trace.R
+          '--args {input} {output.m} {output.p}' mmseq_scripts/mmseq_split_trace.R
         """
 
 rule mmseq_split_bigm_and_k:
     input: 
-        bigm = "mmseq/{sample}.M",
-        k = "mmseq/{sample}.k"
+        bigm = "mmseq_nodup/{sample}.M",
+        k = "mmseq_nodup/{sample}.k"
     output: 
-        bigm_m = "mmseq/{sample}_M.M",
-        bigm_p = "mmseq/{sample}_P.M",
-        k_m = "mmseq/{sample}_M.k",
-        k_p = "mmseq/{sample}_P.k"
+        bigm_m = "mmseq_nodup/{sample}_M.M",
+        bigm_p = "mmseq_nodup/{sample}_P.M",
+        k_m = "mmseq_nodup/{sample}_M.k",
+        k_p = "mmseq_nodup/{sample}_P.k"
     shell:
         """
         R CMD BATCH --no-save --no-restore \
-          '--args {input.bigm} {output.bigm_m} {output.bigm_p}' mmseq_split_bigm.R
+          '--args {input.bigm} {output.bigm_m} {output.bigm_p}' mmseq_scripts/mmseq_split_bigm.R
         cp {input.k} {output.k_m}
         cp {input.k} {output.k_p}
         """
 
 rule mmcollapse:
     input: 
-        mmseq = expand("mmseq/sample_{pair}_{sample}_{allele}.mmseq", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
-        trace = expand("mmseq/sample_{pair}_{sample}_{allele}.trace_gibbs.gz", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
-        bigm = expand("mmseq/sample_{pair}_{sample}_{allele}.M", pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
-    output: expand("mmseq/sample_{pair}_{sample}_{allele}.collapsed.mmseq", pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
+        mmseq = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.mmseq", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
+        trace = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.trace_gibbs.gz", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
+        bigm = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.M", pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
+    output: expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.collapsed.mmseq", pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
     params:
-        basename = expand("mmseq/sample_{pair}_{sample}_{allele}", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
+        base = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
         threads = "12" # requires 1.5 Gb per thread
-    shell: "OMP_NUM_THREADS={params.threads} {MMSEQ}/mmcollapse-linux {params.basename}"
+    shell: "OMP_NUM_THREADS={params.threads} {MMSEQ}/mmcollapse-linux {params.base}"
 
 rule mmdiff:
     input: 
@@ -423,6 +484,17 @@ rule mmdiff:
         p = expand("mmseq/sample_{pair}_{sample}_P.mmseq",
                    pair=config["pairs"], sample=config["samples"])
     output: "mmseq/mmdiff_results.txt"
+    params:
+        n = 2 * len(config["pairs"])
+    shell: "{MMSEQ}/mmdiff-linux -de {params.n} {params.n} {input.m} {input.p} > {output}"
+
+rule mmdiff_gene:
+    input: 
+        m = expand("mmseq/sample_{pair}_{sample}_M.gene.mmseq",
+                   pair=config["pairs"], sample=config["samples"]),
+        p = expand("mmseq/sample_{pair}_{sample}_P.gene.mmseq",
+                   pair=config["pairs"], sample=config["samples"])
+    output: "mmseq/mmdiff_gene_results.txt"
     params:
         n = 2 * len(config["pairs"])
     shell: "{MMSEQ}/mmdiff-linux -de {params.n} {params.n} {input.m} {input.p} > {output}"
