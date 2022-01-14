@@ -19,9 +19,11 @@ rule all:
         #                      pair=config["pairs"], sample=config["samples"]),
         # wasp_result = "wasp_cht/cht_results.txt"
         # mmseq = "mmseq/mmdiff_results.txt"
-        mmseq = "mmseq/mmdiff_gene_results.txt"
+        # mmseq = "mmseq/mmdiff_gene_results.txt"
         # mmseq = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.collapsed.mmseq",
         #               pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
+        terminus = expand("terminus/sample_{pair}_{sample}/groups.txt",
+                          pair=config["pairs"], sample=config["samples"])
 
 rule make_expression:
     output:
@@ -113,6 +115,16 @@ rule import_quants:
     shell:
         "R CMD BATCH --no-save --no-restore '--args {params.nsamp}' import_quants.R"
 
+rule terminus_group:
+    input: "quants/{sample}/quant.sf"
+    output: "terminus/{sample}/groups.txt"
+    params:
+        t2g = "data/t2g.tsv",
+        a2t = "data/a2t.tsv",
+        qdir = "quants/{sample}",
+        tdir = "terminus"
+    shell: "{TERMINUS} group --t2g --a2t --dir {params.qdir} --out {params.tdir}"
+
 rule hisat_align:
     input:
         index = "anno/hisat2_bdgp6/genome.1.ht2",
@@ -145,7 +157,7 @@ rule wasp_snp2h5:
         "--snp_tab {output.tab} --haplotype {output.hap} "
         "data/drosophila_*.vcf "
 
-rule find_intersecting_snps:
+rule wasp_find_intersecting_snps:
     input: 
         bam = "ht2_align/{sample}.bam",
         index = "data/drosophila_snp_index.h5",
@@ -169,7 +181,7 @@ rule find_intersecting_snps:
           {input.bam}
         """
 
-rule hisat_align_flip:
+rule wasp_hisat_align_flip:
     input:
         remap_fq1 = "wasp_mapping/{sample}.remap.fq1.gz",
         remap_fq2 = "wasp_mapping/{sample}.remap.fq2.gz"
@@ -188,7 +200,7 @@ rule hisat_align_flip:
         rm -f {params.temp_sam}
         """
 
-rule bam_the_fake_bams:
+rule wasp_bam_the_fake_bams:
     input:
         keep = "wasp_mapping/{sample}.keep.bam",
         to_remap = "wasp_mapping/{sample}.to.remap.bam",
@@ -203,7 +215,7 @@ rule bam_the_fake_bams:
         rm -f {input.to_remap}
         """
 
-rule filter_remapped:
+rule wasp_filter_remapped:
     input:
         remap_bam = "wasp_mapping/{sample}.to.remap.actual.bam",
         map2_bam = "wasp_mapping/{sample}.map2.bam"
@@ -302,7 +314,7 @@ rule wasp_adjust_het_prob:
         "{CHT}/update_het_probs.py --ref_as_counts {input.ref} --alt_as_counts {input.alt} "
         "{input.adj} {output}"
 
-rule CHT:
+rule wasp_CHT:
     input: 
         expand("wasp_cht/hap_read_counts.sample_{pair}_{sample}.hetp", 
                pair=config["pairs"], sample=config["samples"])
@@ -466,16 +478,16 @@ rule mmseq_split_bigm_and_k:
         cp {input.k} {output.k_p}
         """
 
-rule mmcollapse:
-    input: 
-        mmseq = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.mmseq", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
-        trace = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.trace_gibbs.gz", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
-        bigm = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.M", pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
-    output: expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.collapsed.mmseq", pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
-    params:
-        base = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
-        threads = "12" # requires 1.5 Gb per thread
-    shell: "OMP_NUM_THREADS={params.threads} {MMSEQ}/mmcollapse-linux {params.base}"
+# rule mmcollapse:
+#     input: 
+#         mmseq = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.mmseq", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
+#         trace = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.trace_gibbs.gz", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
+#         bigm = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.M", pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
+#     output: expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.collapsed.mmseq", pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
+#     params:
+#         base = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
+#         threads = "12" # requires 1.5 Gb per thread
+#     shell: "OMP_NUM_THREADS={params.threads} {MMSEQ}/mmcollapse-linux {params.base}"
 
 rule mmdiff:
     input: 
