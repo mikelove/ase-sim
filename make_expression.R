@@ -167,8 +167,15 @@ for (chr in names(dna)) {
 }
 
 # VCF file (just one) for WASP2
-write.table(vcf_table, file=sub("chr_2L","wg",vcffile),
+vcf_header <- c('##fileformat=VCFv4.2',
+                '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
+                '##FORMAT=<ID=GL,Number=G,Type=String,Description="Genotype likelihood">')
+write(vcf_header, file=sub("chr_2L","wg",vcffile), ncolumns=1)
+suppressWarnings({
+  # warnings about appending column names to a file
+  write.table(vcf_table, file=sub("chr_2L","wg",vcffile), append=TRUE,
             quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
+})
 system(paste0("sed -i -e 's/CHROM/#CHROM/' ",sub("chr_2L","wg",vcffile)))
 
 # the test SNP and target regions for WASP
@@ -181,9 +188,11 @@ wasp_test_target <- data.frame(
   strand="+",
   name=paste0(seqnames(g),".",left_pos),
   tstart=sapply(start(red_ebg), paste0, collapse=";"),
-  tend=sapply(end(red_ebg), paste0, collapse=";")
+  tend=sapply(end(red_ebg), paste0, collapse=";"),
+  gene_id=names(g)
 )
 wasp_test_target <- merge(wasp_test_target, alt_table)
+save(wasp_test_target, file=sub(".txt",".rda",testtargetfile))
 wasp_test_target <- wasp_test_target[,c("chr","pos","endpos","ref","alt",
                                         "strand","name","tstart","tend")]
 write.table(wasp_test_target, file=testtargetfile, quote=FALSE,
