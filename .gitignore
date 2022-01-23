@@ -4,8 +4,10 @@ data
 ht2_align
 log
 mmseq
+mmseq_nodup
 quants
 reads
+terminus
 wasp_cht
 wasp_mapping
 *.2bit

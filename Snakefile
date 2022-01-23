@@ -123,7 +123,14 @@ rule terminus_group:
         a2t = "data/a2t.tsv",
         qdir = "quants/{sample}",
         tdir = "terminus"
-    shell: "{TERMINUS} group --t2g --a2t --dir {params.qdir} --out {params.tdir}"
+    shell: "{TERMINUS} group --t2g {params.t2g} --a2t {params.a2t} --dir {params.qdir} --out {params.tdir}"
+
+rule terminus_collapse:
+    input: expand("terminus/sample_{pair}_{sample}/groups.txt", pair=config["pairs"], sample=config["samples"])
+    output: "terminus"
+    params:
+        tdir = "terminus"
+    shell: "{TERMINUS} collapse --dir {params.tdir} --out {params.tdir}"
 
 rule hisat_align:
     input:
