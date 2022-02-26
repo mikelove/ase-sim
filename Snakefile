@@ -3,6 +3,8 @@ configfile: "config.json"
 SALMON = "/proj/milovelab/bin/salmon-1.5.2_linux_x86_64/bin/salmon"
 CHT = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/CHT"
 MAPPING = "python3.5 /nas/longleaf/apps/wasp/2019-12/WASP/mapping"
+# WASP2 requires anaconda
+WASP2 = "python /proj/milovelab/bin/WASP2/src/analysis/run_analysis.py"
 MMSEQ = "/proj/milovelab/bin/mmseq-1.0.10a/bin"
 TERMINUS = "/proj/milovelab/bin/terminus/target/release/terminus"
 
@@ -18,12 +20,12 @@ rule all:
         # wasp_counts = expand("wasp_cht/ref_as_counts.sample_{pair}_{sample}.h5",
         #                      pair=config["pairs"], sample=config["samples"]),
         # wasp_result = "wasp_cht/cht_results.txt"
+        wasp_counts = expand("wasp2_counts/sample_{pair}_{sample}/as_counts.tsv",
+                              pair=config["pairs"], sample=config["samples"])
         # mmseq = "mmseq/mmdiff_results.txt"
         # mmseq = "mmseq/mmdiff_gene_results.txt"
         # mmseq = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.collapsed.mmseq",
         #               pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
-        terminus = expand("terminus/sample_{pair}_{sample}/groups.txt",
-                          pair=config["pairs"], sample=config["samples"])
 
 rule make_expression:
     output:
@@ -32,12 +34,10 @@ rule make_expression:
         chr = "data/drosophila_chr_2L.fasta",
         vcf = "data/drosophila_chr_2L.vcf",
         tt = "data/drosophila_test_target.txt",
-        mmseq = "data/transcripts_mmseq.fa",
-        t2g = "data/t2g.tsv",
-        a2t = "data/a2t.tsv"
+        mmseq = "data/transcripts_mmseq.fa"
     shell:
         "R CMD BATCH --no-save --no-restore '--args {output.txps_fa} {output.granges} "
-        "{output.chr} {output.vcf} {output.tt} {output.mmseq} {output.t2g}' make_expression.R"
+        "{output.chr} {output.vcf} {output.tt} {output.mmseq}' make_expression.R"
 
 rule make_reads:
     input:
@@ -263,13 +263,13 @@ rule wasp_read_count:
         ref = "wasp_cht/ref_as_counts.{sample}.h5",
         alt = "wasp_cht/alt_as_counts.{sample}.h5",
         other = "wasp_cht/other_as_counts.{sample}.h5",
-        count = "wasp_cht/read_counts.{sample}.h5"
+        readcount = "wasp_cht/read_counts.{sample}.h5"
     shell:
         """
         {CHT}/bam2h5.py --chrom data/drosophila_chromInfo.txt \
           --snp_index {input.index} --snp_tab {input.tab} \
           --ref_as_counts {output.ref} --alt_as_counts {output.alt} \
-          --other_as_counts {output.other} --read_counts {output.count} \
+          --other_as_counts {output.other} --read_counts {output.readcount} \
           {input.bam} 2>&1 | grep -v "partially"
         """
 
@@ -282,7 +282,7 @@ rule wasp_extract:
         ref = "wasp_cht/ref_as_counts.{sample}.h5",
         alt = "wasp_cht/alt_as_counts.{sample}.h5",
         other = "wasp_cht/other_as_counts.{sample}.h5",
-        count = "wasp_cht/read_counts.{sample}.h5",
+        readcount = "wasp_cht/read_counts.{sample}.h5",
         tt = "data/drosophila_test_target.txt"
     output: "wasp_cht/hap_read_counts.{sample}.txt"
     shell:
@@ -292,7 +292,7 @@ rule wasp_extract:
          --snp_index {input.index} --snp_tab {input.tab} \
          --samples data/samples --individual sample \
          --ref_as_counts {input.ref} --alt_as_counts {input.alt} \
-         --other_as_counts {input.other} --read_counts {input.count} \
+         --other_as_counts {input.other} --read_counts {input.readcount} \
          {input.tt} > {output}
         """
 
@@ -335,6 +335,17 @@ rule wasp_CHT:
         {CHT}/combined_test.py --min_as_counts 10 \
         --bnb_disp wasp_cht/cht_bnb_coef.txt --as_disp wasp_cht/cht_as_coef.txt \
         wasp_cht/cht_input_files.txt {output}
+        """
+
+rule wasp2_count:
+    input: "wasp_mapping/{sample}.merge.bam"
+    output: "wasp2_counts/{sample}/as_counts.tsv"
+    params:
+        dir = "wasp2_counts/{sample}"
+    shell: 
+        """
+        {WASP2} count --rna -ft gene -a {input} -g data/drosophila_wg.vcf.gz -s sample \
+        -r data/Drosophila_melanogaster.BDGP6.28.100.chr.gtf.gz -o {params.dir}
         """
 
 rule mmseq_index:
