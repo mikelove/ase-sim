@@ -3,8 +3,8 @@
 ## Simulation for creating allelic expression from fly genome
 
 Author: Michael Love and Euphy Wu
-Last modified: Jan 3 2022
-Version: 0.0.5
+Last modified: Feb 26 2022
+Version: 0.0.6
 
 ## Software versions used:
 
@@ -14,6 +14,7 @@ Version: 0.0.5
 * `wasp/2019-12`
 * `bowtie/1.3.1`
 * `mmseq/1.0.10a`
+* `anaconda/2019.10`
 
 ## Directories
 
@@ -28,6 +29,8 @@ quants
 reads
 wasp_cht
 wasp_mapping
+wasp2_counts
+wasp2_tests
 ```
 
 ## Provenance of included files

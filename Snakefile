@@ -11,21 +11,28 @@ TERMINUS = "/proj/milovelab/bin/terminus/target/release/terminus"
 rule all:
     input: 
         # gr = "granges.rda",
-        # reads = expand("reads/sample_{pair}_{sample}_{read}.shuffled.fasta.gz", 
-        #                pair=config["pairs"], sample=config["samples"], 
-        #                read=config["reads"]),
-        # summarized_experiment = "txp_allelic_se.rda"
+        # reads = expand("reads/sample_{pair}_{sample}_{read}.shuffled.fasta", 
+        #                 pair=config["pairs"], sample=config["samples"], 
+        #                 read=config["reads"]),
+        # readsgz = expand("reads/sample_{pair}_{sample}_{read}.shuffled.fasta.gz", 
+        #                 pair=config["pairs"], sample=config["samples"], 
+        #                 read=config["reads"]),
+        # summarized_experiment = "txp_allelic_se.rda",
         # hisat = expand("ht2_align/sample_{pair}_{sample}.bam",
         #                pair=config["pairs"], sample=config["samples"]),
         # wasp_counts = expand("wasp_cht/ref_as_counts.sample_{pair}_{sample}.h5",
         #                      pair=config["pairs"], sample=config["samples"]),
-        # wasp_result = "wasp_cht/cht_results.txt"
-        wasp_counts = expand("wasp2_counts/sample_{pair}_{sample}/as_counts.tsv",
+        # wasp_result = "wasp_cht/cht_results.txt",
+        wasp_test = expand("wasp2_results/sample_{pair}_{sample}/as_results_gene_single.tsv",
                               pair=config["pairs"], sample=config["samples"])
         # mmseq = "mmseq/mmdiff_results.txt"
         # mmseq = "mmseq/mmdiff_gene_results.txt"
         # mmseq = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.collapsed.mmseq",
         #               pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
+
+####################
+# simulation steps #
+####################
 
 rule make_expression:
     output:
@@ -82,6 +89,10 @@ rule compress_reads:
         threads = "12"
     shell: "pigz -p {params.threads} {input}"
 
+################################
+# quantification and alignment #
+################################
+
 rule salmon_index:
     input: "transcripts.fa"
     output: directory("anno/salmon-index-1.5.2")
@@ -115,23 +126,6 @@ rule import_quants:
     shell:
         "R CMD BATCH --no-save --no-restore '--args {params.nsamp}' import_quants.R"
 
-rule terminus_group:
-    input: "quants/{sample}/quant.sf"
-    output: "terminus/{sample}/groups.txt"
-    params:
-        t2g = "data/t2g.tsv",
-        a2t = "data/a2t.tsv",
-        qdir = "quants/{sample}",
-        tdir = "terminus"
-    shell: "{TERMINUS} group --t2g {params.t2g} --a2t {params.a2t} --dir {params.qdir} --out {params.tdir}"
-
-rule terminus_collapse:
-    input: expand("terminus/sample_{pair}_{sample}/groups.txt", pair=config["pairs"], sample=config["samples"])
-    output: "terminus"
-    params:
-        tdir = "terminus"
-    shell: "{TERMINUS} collapse --dir {params.tdir} --out {params.tdir}"
-
 rule hisat_align:
     input:
         index = "anno/hisat2_bdgp6/genome.1.ht2",
@@ -150,6 +144,10 @@ rule hisat_align:
         samtools index {output}
         rm -f {params.temp_sam}
         """
+
+########
+# WASP #
+########
 
 rule wasp_snp2h5:
     input: "data/drosophila_chr_2L.vcf"
@@ -337,6 +335,10 @@ rule wasp_CHT:
         wasp_cht/cht_input_files.txt {output}
         """
 
+#########
+# WASP2 #
+#########
+
 rule wasp2_count:
     input: "wasp_mapping/{sample}.merge.bam"
     output: "wasp2_counts/{sample}/as_counts.tsv"
@@ -347,6 +349,23 @@ rule wasp2_count:
         {WASP2} count --rna -ft gene -a {input} -g data/drosophila_wg.vcf.gz -s sample \
         -r data/Drosophila_melanogaster.BDGP6.28.100.chr.gtf.gz -o {params.dir}
         """
+
+rule wasp2_test:
+    input: "wasp2_counts/{sample}/as_counts.tsv"
+    output: 
+        single = "wasp2_results/{sample}/as_results_gene_single.tsv",
+        linear = "wasp2_results/{sample}/as_results_gene_linear.tsv",
+    params:
+        dir = "wasp2_results/{sample}"
+    shell: 
+        """
+        {WASP2} analysis {input} --rna -m single -o {params.dir}
+        {WASP2} analysis {input} --rna -m linear -o {params.dir}
+        """
+
+#########
+# mmseq #
+#########
 
 rule mmseq_index:
     input: "data/transcripts_mmseq.fa"
@@ -451,62 +470,6 @@ rule mmseq_split:
           '--args {input.gene} {output.m_gene} {output.p_gene}' mmseq_scripts/mmseq_split_sample.R
         """
 
-rule mmseq_split_nodup:
-    input: "mmseq_nodup/{sample}.mmseq"
-    output: 
-        m = "mmseq_nodup/{sample}_M.mmseq",
-        p = "mmseq_nodup/{sample}_P.mmseq"
-    params:
-        base = "mmseq_nodup/{sample}"
-    shell:
-        """
-        R CMD BATCH --no-save --no-restore \
-          '--args {input} {output.m} {output.p}' mmseq_scripts/mmseq_split_sample.R
-        cp {params.base}.identical.mmseq {params.base}_M.identical.mmseq
-        cp {params.base}.identical.mmseq {params.base}_P.identical.mmseq
-        cp {params.base}.identical.trace_gibbs.gz {params.base}_M.identical.trace_gibbs.gz
-        cp {params.base}.identical.trace_gibbs.gz {params.base}_P.identical.trace_gibbs.gz
-        """
-
-rule mmseq_split_trace:
-    input: "mmseq_nodup/{sample}.trace_gibbs.gz"
-    output: 
-        m = "mmseq_nodup/{sample}_M.trace_gibbs.gz",
-        p = "mmseq_nodup/{sample}_P.trace_gibbs.gz"
-    shell:
-        """
-        R CMD BATCH --no-save --no-restore \
-          '--args {input} {output.m} {output.p}' mmseq_scripts/mmseq_split_trace.R
-        """
-
-rule mmseq_split_bigm_and_k:
-    input: 
-        bigm = "mmseq_nodup/{sample}.M",
-        k = "mmseq_nodup/{sample}.k"
-    output: 
-        bigm_m = "mmseq_nodup/{sample}_M.M",
-        bigm_p = "mmseq_nodup/{sample}_P.M",
-        k_m = "mmseq_nodup/{sample}_M.k",
-        k_p = "mmseq_nodup/{sample}_P.k"
-    shell:
-        """
-        R CMD BATCH --no-save --no-restore \
-          '--args {input.bigm} {output.bigm_m} {output.bigm_p}' mmseq_scripts/mmseq_split_bigm.R
-        cp {input.k} {output.k_m}
-        cp {input.k} {output.k_p}
-        """
-
-# rule mmcollapse:
-#     input: 
-#         mmseq = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.mmseq", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
-#         trace = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.trace_gibbs.gz", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
-#         bigm = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.M", pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
-#     output: expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.collapsed.mmseq", pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
-#     params:
-#         base = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
-#         threads = "12" # requires 1.5 Gb per thread
-#     shell: "OMP_NUM_THREADS={params.threads} {MMSEQ}/mmcollapse-linux {params.base}"
-
 rule mmdiff:
     input: 
         m = expand("mmseq/sample_{pair}_{sample}_M.mmseq",
@@ -528,3 +491,63 @@ rule mmdiff_gene:
     params:
         n = 2 * len(config["pairs"])
     shell: "{MMSEQ}/mmdiff-linux -de {params.n} {params.n} {input.m} {input.p} > {output}"
+
+##############################################
+# the following rules for testing mmcollapse #
+##############################################
+
+# rule mmseq_split_nodup:
+#     input: "mmseq_nodup/{sample}.mmseq"
+#     output: 
+#         m = "mmseq_nodup/{sample}_M.mmseq",
+#         p = "mmseq_nodup/{sample}_P.mmseq"
+#     params:
+#         base = "mmseq_nodup/{sample}"
+#     shell:
+#         """
+#         R CMD BATCH --no-save --no-restore \
+#           '--args {input} {output.m} {output.p}' mmseq_scripts/mmseq_split_sample.R
+#         cp {params.base}.identical.mmseq {params.base}_M.identical.mmseq
+#         cp {params.base}.identical.mmseq {params.base}_P.identical.mmseq
+#         cp {params.base}.identical.trace_gibbs.gz {params.base}_M.identical.trace_gibbs.gz
+#         cp {params.base}.identical.trace_gibbs.gz {params.base}_P.identical.trace_gibbs.gz
+#         """
+
+# rule mmseq_split_trace:
+#     input: "mmseq_nodup/{sample}.trace_gibbs.gz"
+#     output: 
+#         m = "mmseq_nodup/{sample}_M.trace_gibbs.gz",
+#         p = "mmseq_nodup/{sample}_P.trace_gibbs.gz"
+#     shell:
+#         """
+#         R CMD BATCH --no-save --no-restore \
+#           '--args {input} {output.m} {output.p}' mmseq_scripts/mmseq_split_trace.R
+#         """
+
+# rule mmseq_split_bigm_and_k:
+#     input: 
+#         bigm = "mmseq_nodup/{sample}.M",
+#         k = "mmseq_nodup/{sample}.k"
+#     output: 
+#         bigm_m = "mmseq_nodup/{sample}_M.M",
+#         bigm_p = "mmseq_nodup/{sample}_P.M",
+#         k_m = "mmseq_nodup/{sample}_M.k",
+#         k_p = "mmseq_nodup/{sample}_P.k"
+#     shell:
+#         """
+#         R CMD BATCH --no-save --no-restore \
+#           '--args {input.bigm} {output.bigm_m} {output.bigm_p}' mmseq_scripts/mmseq_split_bigm.R
+#         cp {input.k} {output.k_m}
+#         cp {input.k} {output.k_p}
+#         """
+
+# rule mmcollapse:
+#     input: 
+#         mmseq = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.mmseq", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
+#         trace = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.trace_gibbs.gz", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
+#         bigm = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.M", pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
+#     output: expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.collapsed.mmseq", pair=config["pairs"], sample=config["samples"], allele=config["alleles"])
+#     params:
+#         base = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}", pair=config["pairs"], sample=config["samples"], allele=config["alleles"]),
+#         threads = "12" # requires 1.5 Gb per thread
+#     shell: "OMP_NUM_THREADS={params.threads} {MMSEQ}/mmcollapse-linux {params.base}"

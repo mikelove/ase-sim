@@ -13,4 +13,4 @@
 #module load wasp
 #module load samtools
 #module load bowtie
-snakemake -j 2 --latency-wait 30 --cluster "sbatch --mem=5000 -N 1 -n 1 --time=60"
+snakemake -j 5 --latency-wait 30 --cluster "sbatch --mem=5000 -N 1 -n 1 --time=60"
