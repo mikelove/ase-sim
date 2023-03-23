@@ -17,14 +17,16 @@ rule all:
         # readsgz = expand("reads/sample_{pair}_{sample}_{read}.shuffled.fasta.gz", 
         #                 pair=config["pairs"], sample=config["samples"], 
         #                 read=config["reads"]),
+        quants = expand("quants/sample_{pair}_{sample}/quant.sf", 
+                        pair=config["pairs"], sample=config["samples"])
         # summarized_experiment = "txp_allelic_se.rda",
         # hisat = expand("ht2_align/sample_{pair}_{sample}.bam",
         #                pair=config["pairs"], sample=config["samples"]),
         # wasp_counts = expand("wasp_cht/ref_as_counts.sample_{pair}_{sample}.h5",
         #                      pair=config["pairs"], sample=config["samples"]),
         # wasp_result = "wasp_cht/cht_results.txt",
-        wasp_test = expand("wasp2_results/sample_{pair}_{sample}/as_results_gene_single.tsv",
-                              pair=config["pairs"], sample=config["samples"])
+        # wasp_test = expand("wasp2_results/sample_{pair}_{sample}/as_results_gene_single.tsv",
+        #                    pair=config["pairs"], sample=config["samples"])
         # mmseq = "mmseq/mmdiff_results.txt"
         # mmseq = "mmseq/mmdiff_gene_results.txt"
         # mmseq = expand("mmseq_nodup/sample_{pair}_{sample}_{allele}.collapsed.mmseq",
@@ -110,7 +112,7 @@ rule salmon_quant:
     params:
         dir = "quants/{sample}",
         threads = "12",
-	nboot = "30"
+	nboot = "100"
     shell:
         "{SALMON} quant -i {input.index} -l IU -p {params.threads} "
 	"--numBootstraps {params.nboot} -d "
@@ -125,7 +127,7 @@ rule import_quants:
     output: "txp_allelic_se.rda"
     shell:
         "R CMD BATCH --no-save --no-restore '--args {params.nsamp}' import_quants.R"
-
+        
 rule hisat_align:
     input:
         index = "anno/hisat2_bdgp6/genome.1.ht2",
